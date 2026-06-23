@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>RL Investigation — Claude Code Crawler</title>
+<style>
+  :root {
+    --bg: #0f1117; --panel: #171a23; --panel2: #1e222e; --ink: #e7e9ee; --muted: #9aa3b2;
+    --line: #2a2f3d; --accent: #6ea8fe; --good: #4ade80; --warn: #fbbf24; --bad: #f87171;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.6 system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
+  .wrap { max-width: 920px; margin: 0 auto; padding: 32px 20px 80px; }
+  h1 { font-size: 2rem; margin: 0 0 8px; letter-spacing: -0.02em; }
+  h2 { font-size: 1.3rem; margin: 40px 0 12px; padding-bottom: 6px; border-bottom: 1px solid var(--line); }
+  h3 { font-size: 1.02rem; margin: 18px 0 6px; }
+  p { color: #cdd2db; }
+  .sub { color: var(--muted); font-size: 1.05rem; margin: 0 0 20px; }
+  .tag { display: inline-block; font: 600 12px/1 var(--mono); color: var(--accent); background: #6ea8fe1a; border: 1px solid #6ea8fe40; padding: 5px 9px; border-radius: 999px; }
+  code, .mono { font-family: var(--mono); font-size: 0.9em; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; margin: 12px 0; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+  .grid .card { margin: 0; }
+  .grid .card b { color: var(--accent); }
+  table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 0.95rem; }
+  th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--line); }
+  th { color: var(--muted); font-weight: 600; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.04em; }
+  td.win { font-family: var(--mono); font-weight: 600; }
+  .bar { height: 7px; border-radius: 4px; background: var(--panel2); overflow: hidden; }
+  .bar > span { display: block; height: 100%; background: linear-gradient(90deg, #6ea8fe, #4ade80); }
+  ol.journey { list-style: none; counter-reset: step; padding: 0; }
+  ol.journey li { counter-increment: step; position: relative; padding: 10px 12px 10px 46px; border-left: 2px solid var(--line); margin-left: 14px; }
+  ol.journey li::before { content: counter(step); position: absolute; left: -15px; top: 10px; width: 28px; height: 28px; border-radius: 50%; background: var(--panel2); border: 1px solid var(--line); display: grid; place-items: center; font: 600 12px var(--mono); color: var(--muted); }
+  .badge { font: 600 11px var(--mono); padding: 2px 7px; border-radius: 6px; margin-left: 6px; white-space: nowrap; }
+  .b-confirm { color: var(--good); background: #4ade8018; }
+  .b-refute { color: var(--bad); background: #f8717118; }
+  .b-fix { color: var(--warn); background: #fbbf2418; }
+  .key { color: var(--accent); font-weight: 600; }
+  .foot { color: var(--muted); font-size: 0.85rem; margin-top: 48px; border-top: 1px solid var(--line); padding-top: 16px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <span class="tag">REINFORCEMENT LEARNING · CLAUDE CODE CRAWLER</span>
+  <h1>Learning to play a roguelike — and matching the search oracle</h1>
+  <p class="sub">A learned, net-guided search agent that <span class="key">matches pure MCTS</span> on the live game: 100% at base (with fewer simulations), ~80% at 1.5× difficulty, ~45% at 2.0×. Built and validated entirely in Node — and the real story is how many "ceilings" turned out to be measurement artifacts.</p>
+
+  <h2>The challenge</h2>
+  <p>The engine is a pure, deterministic reducer; all randomness lives in seeded RNG streams. We feed the agent the full game state <em>except the RNG</em> — so the <span class="key">future is hidden</span>. That makes this a <b>long-horizon planning problem</b>: ~7–8 map nodes, hundreds of decisions, and a single win/loss reward at the very end. The decisive choices (which path, which card, when to rest) pay off far later — so <b>lookahead matters</b>, which is exactly why search dominates a reactive policy and why the network's real job is to <em>guide</em> search.</p>
+
+  <h2>What we built</h2>
+  <div class="grid">
+    <div class="card"><b>Encoder + action mask</b><br/>State → fixed vector (vocab from the content registry; RNG excluded). 73-slot flat action space over the engine's legal actions, with an append-only vocab manifest + fingerprint guard.</div>
+    <div class="card"><b>Networks</b><br/>An MLP and an attention-pooling net over learned entity embeddings — both with <em>hand-derived backprop</em> validated by a finite-difference gradient check.</div>
+    <div class="card"><b>Search family</b><br/>Clairvoyant MCTS, net-guided PUCT, <b>hybrid</b> (net priors + rollout value), <b>ISMCTS</b> (determinized, fog-of-war), and net-guided determinized search for self-play.</div>
+    <div class="card"><b>Training</b><br/>Behavioral cloning, distillation, determinized-Q targets, <b>DAgger</b> (on-policy), and full <b>AlphaZero self-play</b> — plus a Python actor/learner scaffold.</div>
+  </div>
+
+  <h2>The journey — hypotheses & verdicts</h2>
+  <p>Each step tested a claim. Most were <span class="b-refute badge">refuted</span> by a controlled experiment — which is the point.</p>
+  <ol class="journey">
+    <li>Pure MCTS solves base difficulty. <span class="b-confirm badge">confirmed (100%)</span></li>
+    <li>A learned value head can replace rollouts. <span class="b-fix badge">partly — capped ~85%; value-at-leaf is the limiter</span></li>
+    <li>Positional-hand encoding helps the policy. <span class="b-refute badge">refuted — noise</span></li>
+    <li>A "~30% no-search ceiling" is fundamental. <span class="b-refute badge">refuted</span> <span class="muted">(unlearnable targets + distribution shift + a silent <code>poison</code>/<code>dexterity</code> encoding bug + too-few seeds)</span></li>
+    <li>Clone a <em>deterministic, learnable</em> expert (greedy) with DAgger. <span class="b-confirm badge">70% — beats the heuristic</span></li>
+    <li>Hybrid PUCT (priors + rollout value). <span class="b-confirm badge">100% at base @160 sims</span></li>
+    <li>Hard difficulty needs a learnable hard expert → ISMCTS. <span class="b-confirm badge">priors lift hybrid 63%→83%</span></li>
+    <li>One unified net across difficulties. <span class="b-confirm badge">100% base / ~80% hard</span></li>
+    <li>Full AlphaZero self-play (determinized → learnable). <span class="b-confirm badge">self-improves, no collapse</span></li>
+    <li>"We don't match MCTS at hard." <span class="b-refute badge">refuted — measurement error</span> <span class="muted">(two different difficulty mechanisms compared)</span></li>
+  </ol>
+
+  <h2>Results</h2>
+  <p class="sub" style="margin-bottom:8px">Like-for-like (same difficulty mechanism, seeds, sim budget). The learned agent = a net guiding the same clairvoyant search.</p>
+  <table>
+    <thead><tr><th>Difficulty</th><th>Learned (net + hybrid)</th><th></th><th>Pure MCTS</th></tr></thead>
+    <tbody>
+      <tr><td>Base (1.0×)</td><td class="win">100%</td><td><div class="bar"><span style="width:100%"></span></div></td><td class="win">100%</td></tr>
+      <tr><td>Hard (1.5×)</td><td class="win">~80%</td><td><div class="bar"><span style="width:80%"></span></div></td><td class="win">80%</td></tr>
+      <tr><td>Brutal (2.0×)</td><td class="win">~45%</td><td><div class="bar"><span style="width:45%"></span></div></td><td class="win">55%</td></tr>
+      <tr><td>No-search policy (base)</td><td class="win">70%</td><td><div class="bar"><span style="width:70%"></span></div></td><td class="win">— (heuristic 60%)</td></tr>
+    </tbody>
+  </table>
+  <p>Base is matched <em>and</em> we win on efficiency (100% at 160 sims vs MCTS's 200). At 1.5× we match within noise. At 2.0× a fog-of-war gap remains — that tier is the genuine frontier, but it <em>is</em> winnable (clairvoyant MCTS reaches 55%).</p>
+
+  <h2>Why it works</h2>
+  <h3>The net guides search; it doesn't play alone</h3>
+  <p>A single forward pass can't do lookahead, so a no-search policy is decent at base (70%) but weak at hard. Its real value is as a <b>prior</b>: hybrid PUCT uses the net's priors to focus the search and honest rollouts for leaf values — best of both, and more sim-efficient than blind MCTS.</p>
+  <h3>Targets must be learnable</h3>
+  <p>Cloning <em>clairvoyant</em> MCTS fails: its chosen action depends on the hidden future, so the target isn't a function of what the net sees. <b>Determinization</b> — re-sampling the hidden future each search iteration (ISMCTS / determinized-Q) — makes targets an <em>expectation over futures</em>, i.e. a function of the observable state, hence learnable.</p>
+  <h3>Train on your own states (DAgger)</h3>
+  <p>Offline imitation cascades: small errors take the agent to states the dataset never covered. DAgger labels the states the agent <em>actually visits</em>, eliminating the cascade.</p>
+  <h3>Self-play that doesn't collapse</h3>
+  <p>AlphaZero self-play with net-guided <em>determinized</em> search produces learnable, on-policy targets — so, warm-started, it self-improves with no value collapse and no distribution cascade (the failure modes that broke every earlier attempt).</p>
+
+  <h2>Methodology lessons</h2>
+  <div class="card">
+    <p style="margin:0 0 8px"><b>Measure honestly.</b> Fix <em>one</em> difficulty mechanism + seed set + sim budget before quoting a "ceiling." Three confident ceilings here were artifacts of inconsistent setups or too-few seeds.</p>
+    <p style="margin:0 0 8px"><b>Learnable targets, on-policy data.</b> Determinize unlearnable experts; train on the agent's own distribution.</p>
+    <p style="margin:0 0 8px"><b>Expert consistency matters</b> for cloning — a deterministic heuristic clones far better than a strong-but-stochastic search.</p>
+    <p style="margin:0"><b>Audit encoder↔game alignment</b> on every update — a hardcoded status list silently dropped real mechanics; a structural fingerprint now guards it. And the model is tiny (~10k–300k params): GPU is a convenience, not a requirement.</p>
+  </div>
+
+  <p class="foot">Built in <code>src/search/</code> + <code>scripts/</code> on a writable mirror of the Milestone-13 game. Full test suite green throughout; every claim above is measured. See <code>docs/rl-investigation.md</code> for the detailed writeup and reproduction commands.</p>
+
+</div>
+</body>
+</html>
