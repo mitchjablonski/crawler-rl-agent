@@ -24,6 +24,30 @@ tiny (~10k–300k params), so no GPU is required.
 Base is matched *and* won on efficiency. 1.5× is matched within noise. 2.0× is the genuine
 frontier (some gap is the irreducible disadvantage of not seeing the future).
 
+### Multi-arc (acts) × difficulty
+
+The agent is trained and evaluated across the full **difficulty × arc** grid, not just single-act
+runs. The encoder carries an explicit **act one-hot** (a categorical "which arc" tier that the
+continuous global `rowFrac` can't separate — deeper acts draw harder enemy pools), and `unified.ts`
+DAggers across `--arcs=1,3` while `hybrid.ts` evaluates a `--difficulties × --acts` grid. A single
+unified net (hybrid PUCT @160 sims, 20 seeds):
+
+| Difficulty | Single act (1) | Full arc (3 acts) |
+| --- | --- | --- |
+| Base (1.0×) | **100%** | **100%** |
+| Hard (1.5×) | **80%** | **100%** |
+| Brutal (2.0×) | 35%¹ | 70%¹ |
+
+Multi-act is *not* harder for the searching agent — the longer arc has more rests/shops/relics to
+recover with, so hybrid PUCT clears the 3-act hard run consistently, and the 3-act *brutal* run at
+**70%** vs single-act's 35%. ¹The 2.0× row is the net trained on the full `1.0,1.5,2.0 × 1,3` grid
+but evaluated at only 160 sims. At 2× the **sim budget dominates, not net training** — hybrid's leaf
+value comes from greedy rollouts, so a 2×-trained net scores the same 35%/70% at 160 sims as an
+out-of-distribution one; pushing single-act 2.0× to ≈45% takes ~800 sims (see the table above).
+(Reproduce:
+`npx tsx scripts/unified.ts --arcs=1,3 --difficulties=1.0,1.5,2.0 --out=.models/unified.json`
+then `npx tsx scripts/hybrid.ts --ckpt=.models/unified.json --acts=1,3 --difficulties=1.0,1.5,2.0`.)
+
 ## What's here
 
 | Area | Modules |

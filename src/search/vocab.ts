@@ -19,6 +19,8 @@ export interface VocabManifest {
   readonly statuses?: number;
   readonly nodeKinds?: number;
   readonly phases?: number;
+  /** Max act tiers the encoder reserves a one-hot for (multi-arc support). Stamped by createEncoder. */
+  readonly acts?: number;
 }
 
 export function emptyManifest(maxEnemies: number, maxHand: number): VocabManifest {
@@ -71,6 +73,7 @@ export function extendManifest(
     statuses: manifest.statuses,
     nodeKinds: manifest.nodeKinds,
     phases: manifest.phases,
+    acts: manifest.acts,
   };
 }
 
@@ -88,6 +91,7 @@ export function manifestFingerprint(m: VocabManifest): string {
     `st${m.statuses ?? 0}`,
     `nk${m.nodeKinds ?? 0}`,
     `ph${m.phases ?? 0}`,
+    `ac${m.acts ?? 0}`,
     `c{${canonical(m.cards)}}`,
     `n{${canonical(m.enemies)}}`,
     `r{${canonical(m.relics)}}`,

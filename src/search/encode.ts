@@ -26,6 +26,13 @@ export const MAX_ENEMIES = 4;
 /** Hand positions encoded/acted-on. Shared with mask.ts so input slots align with playCard handIndex. */
 export const MAX_HAND = 10;
 
+/**
+ * Act tiers the encoder reserves a one-hot for. The arc is 1–3 acts (run.ts/map.ts),
+ * so 3 covers the live game with no headroom waste; act >= MAX_ACTS clamps to the last
+ * slot. Folded into the manifest fingerprint so changing it forces an explicit retrain.
+ */
+export const MAX_ACTS = 3;
+
 /** Denominators that keep raw magnitudes roughly in [0,1] without clipping signal. */
 const NORM = { hp: 100, block: 50, gold: 200, energy: 10, turn: 30, status: 10 } as const;
 
@@ -49,7 +56,8 @@ export type EncoderField =
   | 'playerStatuses'
   | 'phase'
   | 'nodeKind'
-  | 'rowFrac';
+  | 'rowFrac'
+  | 'act';
 
 /** [offset, length] for each field. A finite key union keeps access non-optional. */
 export type EncoderLayout = Readonly<
@@ -98,6 +106,7 @@ export function createEncoder(
     statuses: STATUS_IDS.length,
     nodeKinds: NODE_KINDS.length,
     phases: PHASES.length,
+    acts: MAX_ACTS,
   };
   const cards = new Map<string, number>(Object.entries(m.cards));
   const enemies = new Map<string, number>(Object.entries(m.enemies));
@@ -126,6 +135,7 @@ export function createEncoder(
   add('phase', PHASES.length);
   add('nodeKind', NODE_KINDS.length);
   add('rowFrac', 1);
+  add('act', MAX_ACTS); // which act tier (one-hot) — distinguishes arcs that rowFrac alone blurs
   const size = off;
 
   const countInto = (
@@ -210,6 +220,10 @@ export function createEncoder(
     if (node) {
       const nk = NODE_KINDS.indexOf(node.kind);
       if (nk >= 0) v[layout.nodeKind[0] + nk] = 1;
+      // Act one-hot (clamped to the reserved tiers): a categorical "which arc" signal the
+      // continuous global rowFrac can't separate (deeper acts draw harder enemy pools).
+      const act = Math.min(Math.max(node.act, 0), MAX_ACTS - 1);
+      v[layout.act[0] + act] = 1;
     }
     const bossRow = state.map.nodes[state.map.bossId]?.row ?? 1;
     v[layout.rowFrac[0]] = (node?.row ?? 0) / Math.max(1, bossRow);
