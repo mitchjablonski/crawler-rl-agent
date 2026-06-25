@@ -23,6 +23,7 @@ function arg(name: string, fallback: string): string {
 const CKPT = arg('ckpt', '.models/unified.json');
 const ITERS = Number(arg('iters', '120'));
 const HP = Number(arg('enemyhp', '1.0'));
+const ACTS = Number(arg('acts', '1'));
 const MAX_TRIES = Number(arg('tries', '12'));
 
 const ck = loadCheckpoint(CKPT);
@@ -113,7 +114,7 @@ let result = 'defeat';
 let usedSeed = '';
 for (let t = 0; t < MAX_TRIES; t++) {
   const seed = `demo-${t}`;
-  const config: RunConfig = { ...DEFAULT_RUN_CONFIG, enemyHpMult: HP };
+  const config: RunConfig = { ...DEFAULT_RUN_CONFIG, enemyHpMult: HP, acts: ACTS };
   const rng = new Rng(seedFromString(`demo-search-${t}`));
   const rec: Step[] = [];
   let s: RunState = createRun(content, seed, config);
@@ -127,7 +128,7 @@ for (let t = 0; t < MAX_TRIES; t++) {
 }
 console.log(`recorded ${steps.length} decisions · result=${result} · seed=${usedSeed} · hp=${HP} · iters=${ITERS}`);
 
-const TRAJ = JSON.stringify({ result, seed: usedSeed, enemyHpMult: HP, iters: ITERS, steps });
+const TRAJ = JSON.stringify({ result, seed: usedSeed, enemyHpMult: HP, acts: ACTS, iters: ITERS, steps });
 
 const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>

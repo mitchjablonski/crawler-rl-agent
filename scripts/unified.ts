@@ -38,6 +38,9 @@ const HIDDEN = Number(arg('hidden', String(DEFAULT_HIDDEN)));
 const EVAL_RUNS = Number(arg('evalRuns', '30'));
 const OUT = arg('out', '.models/unified.json');
 const DIFFICULTIES = arg('difficulties', '1.0,1.5').split(',').map(Number).filter((n) => n > 0);
+// Arc counts to train across (1 = single session, 3 = full multi-act arc). The encoder's
+// act one-hot lets one net specialize per tier; DAgger samples the difficulty×arc grid.
+const ARCS = arg('arcs', '1,3').split(',').map(Number).filter((n) => n >= 1);
 
 const enc = createEncoder(content, undefined, { positionalHand: false });
 const initRng = new Rng(seedFromString('uni-init'));
@@ -55,7 +58,8 @@ for (let round = 0; round < ROUNDS; round++) {
   let ep = 0;
   while (added < STATES_PER_ROUND) {
     const d = DIFFICULTIES[(round * 5 + ep) % DIFFICULTIES.length] ?? 1;
-    const config: RunConfig = { ...DEFAULT_RUN_CONFIG, enemyHpMult: d };
+    const acts = ARCS[(round * 3 + ep) % ARCS.length] ?? 1;
+    const config: RunConfig = { ...DEFAULT_RUN_CONFIG, enemyHpMult: d, acts };
     const useGreedy = d <= 1.0;
     let s: RunState = createRun(content, `uni-${round}-${ep}`, config);
     for (let i = 0; i < 6000 && s.phase !== 'victory' && s.phase !== 'defeat' && added < STATES_PER_ROUND; i++) {
@@ -88,9 +92,11 @@ for (let round = 0; round < ROUNDS; round++) {
 
   const base = policyWinRate(content, enc, net, DEFAULT_RUN_CONFIG, evalSeeds);
   const hard = policyWinRate(content, enc, net, { ...DEFAULT_RUN_CONFIG, enemyHpMult: 1.5 }, evalSeeds);
+  const arc3 = policyWinRate(content, enc, net, { ...DEFAULT_RUN_CONFIG, acts: 3 }, evalSeeds);
   console.log(
     `round ${round}: beta=${beta.toFixed(2)} |D|=${D.length} loss=${loss.toFixed(4)} ` +
-      `no-search base=${(base * 100).toFixed(1)}% hp1.5=${(hard * 100).toFixed(1)}%`,
+      `no-search base=${(base * 100).toFixed(1)}% hp1.5=${(hard * 100).toFixed(1)}% ` +
+      `3-act=${(arc3 * 100).toFixed(1)}%`,
   );
 }
 
