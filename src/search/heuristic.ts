@@ -3,6 +3,7 @@
 // for the expert — MCTS + this greedy rollout reaches 100% win rate at base.
 import { EngineError } from '../engine/types.js';
 import type { ContentRegistry, GameAction, RunState } from '../engine/types.js';
+import { legalActions } from './legalActions.js';
 import type { RolloutPolicy } from './mcts.js';
 
 function livingTarget(state: RunState, lowest: boolean): number | undefined {
@@ -72,8 +73,12 @@ function nonCombat(state: RunState, content: ContentRegistry, rand: () => number
     }
     case 'rest':
       return { type: 'rest' };
-    case 'event':
-      return { type: 'chooseEventOption', index: 0 };
+    case 'event': {
+      // M38 events can show a result screen (only continueEvent is legal) and gate
+      // options behind requirements — take the first legal move instead of a fixed index.
+      const legal = legalActions(content, state);
+      return legal[0] ?? { type: 'continueEvent' };
+    }
     default:
       throw new EngineError(`no non-combat action for phase ${state.phase}`);
   }

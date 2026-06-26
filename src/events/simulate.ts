@@ -7,7 +7,7 @@ export interface TimedRecord {
   readonly record: HookRecord;
 }
 
-export const SCENARIOS = ['busy-refactor', 'review-time', 'quiet-session'] as const;
+export const SCENARIOS = ['busy-refactor', 'review-time', 'quiet-session', 'lint-and-ship'] as const;
 export type ScenarioName = (typeof SCENARIOS)[number];
 
 export function isScenario(name: string): name is ScenarioName {
@@ -63,6 +63,18 @@ export function scenarioRecords(name: ScenarioName, startAt: number): TimedRecor
         rec(3_000, 'PostToolUse', { tool_name: 'Read', tool_input: { file_path: 'README.md' } }),
         rec(6_000, 'PostToolUse', edit('README.md')),
         rec(10_000, 'Stop'),
+      ];
+    case 'lint-and-ship':
+      return [
+        rec(0, 'SessionStart'),
+        rec(2_000, 'PostToolUse', edit('src/api/auth.ts')),
+        rec(4_000, 'PostToolUse', bash('npm run lint', 1)),
+        rec(7_000, 'PostToolUse', edit('src/api/auth.ts')),
+        rec(9_000, 'PostToolUse', bash('npm run lint', 0)),
+        rec(12_000, 'PostToolUse', bash('npm test', 0)),
+        rec(15_000, 'PostToolUse', bash('git commit -m "fix auth lint"', 0)),
+        rec(18_000, 'PostToolUse', bash('git push origin main', 0)),
+        rec(21_000, 'Stop'),
       ];
   }
 }

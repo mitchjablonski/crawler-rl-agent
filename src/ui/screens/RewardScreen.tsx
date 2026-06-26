@@ -1,5 +1,8 @@
 import { Box, Text, useInput } from 'ink';
 import type { ContentRegistry, GameAction, RunState } from '../../engine/types.js';
+import { theme } from '../theme.js';
+import { CardTile } from '../components/CardTile.js';
+import { Screen } from '../components/Screen.js';
 
 export function RewardScreen({
   state,
@@ -27,29 +30,27 @@ export function RewardScreen({
   });
 
   return (
-    <Box flexDirection="column" paddingX={1}>
-      <Text bold color="yellow">
-        Victory! +{reward?.gold ?? 0}g
-      </Text>
+    <Screen title={`Victory! +${reward?.gold ?? 0}g`} footer="number: take card  [s] skip" framed={false}>
       {reward?.relicId !== undefined && (
-        <Text color="cyan">
+        <Text color={theme.colors.accent}>
           Relic claimed:{' '}
           {relicDisplayName ?? content.relics[reward.relicId]?.name ?? reward.relicId}
         </Text>
       )}
-      <Box marginTop={1} flexDirection="column">
-        <Text bold>Take a card for your deck:</Text>
+      {reward?.potionId !== undefined && (
+        <Text color={theme.colors.success}>
+          Found a potion:{' '}
+          {content.potions[reward.potionId]?.name ?? reward.potionId} (added to your satchel)
+        </Text>
+      )}
+      <Text bold>Take a card for your deck:</Text>
+      <Box flexDirection="row" flexWrap="wrap" width={theme.layout.contentWidth}>
         {cards.map((cardId, i) => {
           const card = content.cards[cardId];
           if (!card) return null;
-          return (
-            <Text key={cardId}>
-              [{i + 1}] ({card.cost}) {card.name} - {card.description}
-            </Text>
-          );
+          return <CardTile key={cardId} marker={`[${i + 1}]`} card={card} />;
         })}
-        <Text dimColor>[s] Skip</Text>
       </Box>
-    </Box>
+    </Screen>
   );
 }

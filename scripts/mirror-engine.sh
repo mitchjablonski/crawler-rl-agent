@@ -2,9 +2,11 @@
 # Refresh the engine mirror from the upstream claude-code-crawler game repo.
 #
 # Pulls engine source / scripts / config updates from upstream WITHOUT touching
-# our RL additions (src/search/{encode,mask,vocab,checkpoint,net,train}*) or our
-# deepPairing config (.claude, .deeppairing, .mcp.json). Upstream-owned search
-# files (legalActions.ts, mcts.ts) ARE updated.
+# our RL additions (src/search/{encode,mask,vocab,checkpoint,net,train}*), our
+# deepPairing config (.claude, .deeppairing, .mcp.json), our project identity
+# (README.md, .github CI, docs/, .gitignore, vitest.config.ts), or upstream's dev
+# artifacts (.evolution-artifacts). Upstream-owned search files (legalActions.ts,
+# mcts.ts) ARE updated.
 #
 # Usage:  scripts/mirror-engine.sh [path-to-upstream]   (default: ../claudeCodeCrawler)
 set -euo pipefail
@@ -21,6 +23,9 @@ echo "Mirroring engine: $UPSTREAM -> $HERE"
 rsync -a \
   --exclude='.git' --exclude='node_modules' --exclude='dist' \
   --exclude='.claude' --exclude='.deeppairing' --exclude='.mcp.json' \
+  --exclude='.evolution-artifacts' --exclude='.github' \
+  --exclude='README.md' --exclude='docs' --exclude='.gitignore' \
+  --exclude='vitest.config.ts' \
   --exclude='src/search/encode.ts'     --exclude='src/search/encode.test.ts' \
   --exclude='src/search/mask.ts'       --exclude='src/search/mask.test.ts' \
   --exclude='src/search/vocab.ts'      --exclude='src/search/vocab.test.ts' \

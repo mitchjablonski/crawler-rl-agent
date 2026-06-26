@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { render } from 'ink-testing-library';
 import { App } from './App.js';
 import { createRun } from '../engine/run.js';
-import { DEFAULT_RUN_CONFIG, content } from '../engine/content/index.js';
+import { CHARACTERS, DEFAULT_RUN_CONFIG, content } from '../engine/content/index.js';
 import type { MetaSettings, MetaState, RunRecord, SaveStore } from '../persistence/saves.js';
 import type { RunState } from '../engine/types.js';
 import type { HookRecord } from '../events/types.js';
@@ -114,6 +114,51 @@ const hookRec = (hookType: string, payload: Record<string, unknown> = {}): HookR
   payload,
 });
 
+describe('App deck-view overlay', () => {
+  it('opens the read-only deck overlay from the map and closes back to it', async () => {
+    const mem = memoryStore();
+    const { lastFrame, stdin } = await renderApp(<App deps={deps(mem)} />);
+    stdin.write('n');
+    await tick();
+    expect(lastFrame()).toContain('Choose your path');
+    expect(lastFrame()).toContain('[v] view deck');
+
+    // Open the overlay: header + a starter card name; map prompt is gone.
+    stdin.write('v');
+    await tick();
+    const open = lastFrame() ?? '';
+    expect(open).toContain('Your deck');
+    expect(open).toContain('cards)');
+    expect(open).not.toContain('Choose your path');
+    // The knight starter deck lists its cards with grouped counts.
+    expect(open).toContain('Rusty Shortsword');
+    expect(open).toContain('x4'); // identical ids collapse to one xN row (D20: 4x shortsword)
+    // Each card's effect description shows so the deck view is a planning tool.
+    expect(open).toContain(content.cards['rusty-shortsword']!.description);
+
+    // Close with v -> back to the map; deck-view input did not descend a node.
+    stdin.write('v');
+    await tick();
+    expect(lastFrame()).toContain('Choose your path');
+    expect(lastFrame()).not.toContain('Your deck');
+  });
+
+  it('closes the deck overlay with esc', async () => {
+    const mem = memoryStore();
+    const { lastFrame, stdin } = await renderApp(<App deps={deps(mem)} />);
+    stdin.write('n');
+    await tick();
+    stdin.write('v');
+    await tick();
+    expect(lastFrame()).toContain('Your deck');
+
+    stdin.write('\x1b'); // escape
+    await tick();
+    expect(lastFrame()).toContain('Choose your path');
+    expect(lastFrame()).not.toContain('Your deck');
+  });
+});
+
 describe('App with hook events', () => {
   it('flips the link indicator and grants bounded gold at the map', async () => {
     const mem = memoryStore();
@@ -185,7 +230,10 @@ describe('App with hook events', () => {
     const { lastFrame, stdin } = await renderApp(
       <App deps={{ ...deps(mem), ai: fakeAi }} />,
     );
-    expect(lastFrame()).toContain('announcer: fake-ai');
+    // A live backend reads as a player-facing "live (...)" label, never the
+    // bare dev backend id, and never the meaningless "static".
+    expect(lastFrame()).toContain('announcer: live (fake-ai)');
+    expect(lastFrame()).not.toContain('announcer: fake-ai\n');
     expect(lastFrame()).toContain('Snark: wry');
 
     stdin.write('s');
@@ -238,10 +286,16 @@ describe('App with hook events', () => {
     };
     const { lastFrame, stdin } = await renderApp(<App deps={{ ...deps(mem), ai: fakeAi }} />);
     expect(lastFrame()).toContain('Class: Knight');
+    // The selected class' tagline renders so a new player sees what it does,
+    // and it changes when the class is cycled.
+    expect(lastFrame()).toContain(CHARACTERS.knight!.description);
+    expect(lastFrame()).not.toContain(CHARACTERS.apothecary!.description);
 
     stdin.write('k');
     await tick();
     expect(lastFrame()).toContain('Class: Apothecary');
+    expect(lastFrame()).toContain(CHARACTERS.apothecary!.description);
+    expect(lastFrame()).not.toContain(CHARACTERS.knight!.description);
     expect(mem.store.loadMeta().settings?.character).toBe('apothecary');
   });
 

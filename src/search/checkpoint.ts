@@ -54,6 +54,7 @@ export function assertCompatible(checkpoint: Checkpoint, current: VocabManifest)
   check('card', checkpoint.manifest.cards, current.cards);
   check('enemy', checkpoint.manifest.enemies, current.enemies);
   check('relic', checkpoint.manifest.relics, current.relics);
+  check('potion', checkpoint.manifest.potions ?? {}, current.potions ?? {});
   if (checkpoint.manifest.maxEnemies !== current.maxEnemies) {
     throw new Error(
       `vocab incompatible: maxEnemies changed ${checkpoint.manifest.maxEnemies} -> ${current.maxEnemies}.`,

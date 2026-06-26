@@ -74,5 +74,5 @@ describe('mctsAction', () => {
     const mctsWins = runWith((s, seed) => mctsAction(content, s, opts(seed, 60)));
     const greedyWins = runWith((s, seed) => greedyRollout(content, s, mulberry(seed)));
     expect(mctsWins).toBeGreaterThanOrEqual(greedyWins);
-  });
+  }, 30000); // CPU-heavy sample (8 runs x MCTS); exceeds vitest 4's stricter 5s default
 });
