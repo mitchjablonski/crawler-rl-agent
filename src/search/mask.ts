@@ -15,6 +15,16 @@ export const MAX_TARGETS = MAX_ENEMIES + 1;
 export const MAX_REWARD = 4;
 export const MAX_SHOP = 8;
 export const MAX_EVENT_OPT = 4;
+// M38 mechanics:
+//   potions   — in-combat consumables; same target shape as playCard (enemy index or self).
+//               DEFAULT_MAX_POTIONS=3; +1 headroom for config overrides.
+//   buyPotion — shop potion stock (separate from card stock); small.
+//   upgrade   — rest-screen upgradeCard by deckIndex; sized to a typical mid-run deck.
+//               Overflow (deeper deck indices) drops to MCTS-only, not net-visible.
+//   continue  — single continueEvent slot (advances an event past its result screen).
+export const MAX_POTIONS = 4;
+export const MAX_SHOP_POTION = 4;
+export const MAX_UPGRADE = 24;
 
 const OFF_ENDTURN = 0;
 const OFF_SKIP = 1;
@@ -25,9 +35,13 @@ const OFF_PLAY = OFF_NODE + MAX_BRANCH;
 const OFF_REWARD = OFF_PLAY + MAX_HAND * MAX_TARGETS;
 const OFF_SHOP = OFF_REWARD + MAX_REWARD;
 const OFF_EVENT = OFF_SHOP + MAX_SHOP;
+const OFF_USEPOTION = OFF_EVENT + MAX_EVENT_OPT;
+const OFF_BUYPOTION = OFF_USEPOTION + MAX_POTIONS * MAX_TARGETS;
+const OFF_UPGRADE = OFF_BUYPOTION + MAX_SHOP_POTION;
+const OFF_CONTINUE = OFF_UPGRADE + MAX_UPGRADE;
 
 /** Total width of the flat policy head. */
-export const ACTION_SPACE = OFF_EVENT + MAX_EVENT_OPT;
+export const ACTION_SPACE = OFF_CONTINUE + 1;
 
 /**
  * Flat slot index for an action, given the state it was generated from.
@@ -61,6 +75,22 @@ export function slotOf(state: RunState, action: GameAction): number | null {
       return action.index < MAX_SHOP ? OFF_SHOP + action.index : null;
     case 'chooseEventOption':
       return action.index < MAX_EVENT_OPT ? OFF_EVENT + action.index : null;
+    case 'usePotion': {
+      if (action.potionIndex >= MAX_POTIONS) return null;
+      const t = action.targetIndex ?? MAX_ENEMIES; // self/all-enemies -> the untargeted slot
+      if (t >= MAX_TARGETS) return null;
+      return OFF_USEPOTION + action.potionIndex * MAX_TARGETS + t;
+    }
+    case 'buyPotion':
+      return action.index < MAX_SHOP_POTION ? OFF_BUYPOTION + action.index : null;
+    case 'upgradeCard':
+      return action.deckIndex < MAX_UPGRADE ? OFF_UPGRADE + action.deckIndex : null;
+    case 'continueEvent':
+      return OFF_CONTINUE;
+    default:
+      // Unknown/overflowing action -> dropped (searchable via legalActions, invisible to the net)
+      // rather than corrupting the mask with an undefined index.
+      return null;
   }
 }
 

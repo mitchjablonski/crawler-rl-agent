@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { applyAction, createRun } from './run.js';
 import { CHARACTERS, DEFAULT_RUN_CONFIG, content } from './content/index.js';
+import { eventRequirementMet } from './types.js';
 import type { GameAction, RunState } from './types.js';
 
 const ACTION_CAP = 10_000;
@@ -37,8 +38,14 @@ function greedy(state: RunState): GameAction {
       return { type: 'leaveShop' };
     case 'rest':
       return { type: 'rest' };
-    case 'event':
-      return { type: 'chooseEventOption', index: 0 };
+    case 'event': {
+      // A result screen is showing → continue back to the map.
+      if (state.event?.result) return { type: 'continueEvent' };
+      // Otherwise pick the first AVAILABLE option (respect stat gating).
+      const def = state.event ? content.events[state.event.eventId] : undefined;
+      const index = (def?.options ?? []).findIndex((o) => eventRequirementMet(state, o.requires));
+      return { type: 'chooseEventOption', index: index < 0 ? 0 : index };
+    }
     case 'victory':
     case 'defeat':
       throw new Error('run already over');

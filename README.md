@@ -12,50 +12,44 @@ tiny (~10k–300k params), so no GPU is required.
 > visual explainer. A self-contained replay of the agent playing is in
 > [`docs/demo.html`](docs/demo.html).
 
-## Results (M13 content, like-for-like: same difficulty mechanism, seeds, sim budget)
+## Results (M38 content — 79 cards, 20 enemies, 21 relics, 8 potions, multi-act)
 
-| Difficulty | Learned agent (net + hybrid PUCT) | Pure MCTS |
-| --- | --- | --- |
-| Base (1.0×) | **100%** (@160 sims) | 100% (@400) |
-| Hard (1.5×) | **~80%** | 80% — matched |
-| Brutal (2.0×) | **~45%** (@800) | 55% — fog-of-war gap |
-| No-search policy (base) | 70% | (greedy heuristic 60%) |
+The agent is trained and evaluated across the full **difficulty × arc** grid. A single unified net
+(DAgger across `--arcs=1,3 --difficulties=1.0,1.5,2.0`) is measured with **hybrid PUCT @160 sims**
+over 20 held-out seeds:
 
-Base is matched *and* won on efficiency. 1.5× is matched within noise. 2.0× is the genuine
-frontier (some gap is the irreducible disadvantage of not seeing the future).
-
-### Multi-arc (acts) × difficulty
-
-The agent is trained and evaluated across the full **difficulty × arc** grid, not just single-act
-runs. The encoder carries an explicit **act one-hot** (a categorical "which arc" tier that the
-continuous global `rowFrac` can't separate — deeper acts draw harder enemy pools), and `unified.ts`
-DAggers across `--arcs=1,3` while `hybrid.ts` evaluates a `--difficulties × --acts` grid. A single
-unified net (hybrid PUCT @160 sims, 20 seeds):
-
-| Difficulty | Single act (1) | Full arc (3 acts) |
+| Difficulty | Single act — hybrid | 3-act arc — hybrid |
 | --- | --- | --- |
 | Base (1.0×) | **100%** | **100%** |
-| Hard (1.5×) | **80%** | **100%** |
-| Brutal (2.0×) | 35%¹ | 70%¹ |
+| Hard (1.5×) | **90%** | **100%** |
+| Brutal (2.0×) | 55% | **95%** |
 
-Multi-act is *not* harder for the searching agent — the longer arc has more rests/shops/relics to
-recover with, so hybrid PUCT clears the 3-act hard run consistently, and the 3-act *brutal* run at
-**70%** vs single-act's 35%. ¹The 2.0× row is the net trained on the full `1.0,1.5,2.0 × 1,3` grid
-but evaluated at only 160 sims. At 2× the **sim budget dominates, not net training** — hybrid's leaf
-value comes from greedy rollouts, so a 2×-trained net scores the same 35%/70% at 160 sims as an
-out-of-distribution one; pushing single-act 2.0× to ≈45% takes ~800 sims (see the table above).
-(Reproduce:
+The same net, no-search vs. net-only-PUCT vs. hybrid at base (single act): **65% → 90% → 100%** — the
+search does the lookahead the single forward pass can't, and the honest rollout leaf value closes the
+last gap to 100%.
+
+Two durable findings, both still true on M38:
+- **Multi-act is *easier* for the searching agent, not harder.** The longer 3-act arc hands it more
+  rests/shops/relics to recover with, so it meets or beats single-act at every difficulty — most
+  starkly 3-act brutal **95%** vs single-act brutal **55%**.
+- **At 2× the sim budget dominates.** Hybrid's leaf value comes from greedy rollouts, so single-act
+  brutal is sim-bound at 160 sims; more sims lift it further (the 3-act arc compensates with recovery
+  resources instead).
+
+The encoder carries an explicit **act one-hot** (a "which arc" tier the continuous global `rowFrac`
+blurs) and **held-potion counts** (M38's in-combat consumables). Reproduce:
 `npx tsx scripts/unified.ts --arcs=1,3 --difficulties=1.0,1.5,2.0 --out=.models/unified.json`
-then `npx tsx scripts/hybrid.ts --ckpt=.models/unified.json --acts=1,3 --difficulties=1.0,1.5,2.0`.)
+then `npx tsx scripts/hybrid.ts --ckpt=.models/unified.json --acts=1,3 --difficulties=1.0,1.5,2.0`.
 
 ## What's here
 
 | Area | Modules |
 | --- | --- |
-| **Observation / actions** | `encode.ts` (state → vector; append-only vocab manifest + structural fingerprint guard), `mask.ts` (73-slot action space + masking), `env.ts` (gym-style `CrawlerEnv`: reset/step/reward) |
+| **Observation / actions** | `encode.ts` (state → vector; append-only vocab manifest + structural fingerprint guard; act one-hot + held-potion counts), `mask.ts` (122-slot action space + masking), `env.ts` (gym-style `CrawlerEnv`: reset/step/reward) |
 | **Networks** | `net.ts` (MLP + hand-derived backprop + `trainStep`/`reinforceStep`), `entityNet.ts` (attention-pooling net; backprop **gradient-checked**) |
 | **Search** | `mcts.ts`, `puct.ts` (net-guided + **hybrid** + prior dampening), `ismcts.ts` (determinized, learnable expert), `azsearch.ts` (net-guided determinized PUCT for self-play) |
 | **Training** | behavioral cloning, distillation, determinized-Q (`determinized.ts`), **DAgger** (`dagger.ts`), **AlphaZero self-play** (`selfplay.ts`), reference **REINFORCE** (`reinforce.ts`) |
+| **Balancing** | `balance.ts` (player tiers, episode metrics, usage telemetry, content ablation) + `scripts/balance-{grid,telemetry,ablation}.ts` |
 
 ## Quick start
 
@@ -76,6 +70,30 @@ npx tsx scripts/reinforce.ts --iters=80
 ```
 
 Trained checkpoints are written to `.models/` (gitignored).
+
+## Balancing the game with the agent
+
+The agent doubles as a tireless playtester. Three skill tiers act as reference "players" —
+**optimal** (hybrid PUCT), **median** (greedy heuristic), **casual** (no-search policy) — and the
+*spread between them* tells you whether outcomes are skill- or luck-driven. Three tools (greedy needs
+no model and runs instantly; pass `--ckpt … --player=hybrid` for the optimal agent):
+
+```sh
+# 1) Difficulty calibration + skill ladder: win rate / HP cost / length across difficulty × arcs × tier
+npx tsx scripts/balance-grid.ts --difficulties=1.0,1.5,2.0 --acts=1,3 --runs=30 --ckpt=.models/unified_m38.json
+
+# 2) Usage telemetry: what gets drafted/played/bought, dead vs auto-include content, enemy lethality
+npx tsx scripts/balance-telemetry.ts --runs=200 --difficulties=1.0,1.5 --acts=1,3
+
+# 3) Content ablation: per card/relic/potion win-rate delta when neutralized (power ranking)
+npx tsx scripts/balance-ablation.ts --kind=relics --runs=40 --difficulty=1.5
+```
+
+`balance-grid` finds the difficulty that lands each tier on a target win rate (and flags luck-vs-skill).
+`balance-telemetry` surfaces never-used content (buff/cut) and difficulty spikes (the most lethal enemy).
+`balance-ablation` ranks content by contribution: large +Δ = load-bearing/over-relied (nerf), ~0 =
+irrelevant/dead, −Δ = a trap the player is better off without. Caveat: the *optimal* agent measures
+intrinsic balance, not the median experience — that's why the weaker tiers run too.
 
 ## How it works (in one paragraph)
 

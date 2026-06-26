@@ -65,6 +65,54 @@ export function ruleFor(event: GameEvent, snark: SnarkLevel = 1): RuleOutcome {
           snark,
         ),
       };
+    case 'lint_failed':
+      return {
+        modifier: { kind: 'queueElite', enemyId: 'lint-goblin' },
+        narration: pick(
+          {
+            0: 'Lint failed. An elite approaches.',
+            1: 'The linter flagged you. The Lint Goblin straightens its glasses and stands up.',
+            2: 'Lint errors? The Lint Goblin was BORN for this. It cracks its knuckles and cites the style guide.',
+          },
+          snark,
+        ),
+      };
+    case 'lint_passed':
+      return {
+        modifier: { kind: 'lootRoll', size: 'small' },
+        narration: pick(
+          {
+            0: 'Lint passed. Minor gold.',
+            1: 'Clean code, clean conscience. A few tidy coins clink down.',
+            2: 'No lint errors? Show-off. The dungeon flips you a coin and tells you not to get used to it.',
+          },
+          snark,
+        ),
+      };
+    case 'committed':
+      return {
+        modifier: { kind: 'healPlayer', amount: 5 },
+        narration: pick(
+          {
+            0: 'Committed. +5 HP checkpoint.',
+            1: 'You saved your progress. The dungeon bookmarks your soul. +5 HP.',
+            2: 'A commit? Brave, given that history. The dungeon stitches you up at the checkpoint anyway. +5 HP.',
+          },
+          snark,
+        ),
+      };
+    case 'pushed':
+      return {
+        modifier: { kind: 'blessNextCombat', status: 'strength', stacks: 1 },
+        narration: pick(
+          {
+            0: 'Pushed. +1 Strength next combat.',
+            1: 'You shipped it. The dungeon braces for the regressions; you carry the swagger. +1 Strength next combat.',
+            2: 'You PUSHED that? To main, no less. The dungeon respects the audacity and hands you +1 Strength for the fight that cleans up after you.',
+          },
+          snark,
+        ),
+      };
     case 'agent_spawned':
       return {
         modifier: { kind: 'blessNextCombat', status: 'strength', stacks: 1 },
@@ -82,9 +130,9 @@ export function ruleFor(event: GameEvent, snark: SnarkLevel = 1): RuleOutcome {
         modifier: { kind: 'healPlayer', amount: 10 },
         narration: pick(
           {
-            0: 'Session started. +5 HP.',
+            0: 'Session started. +10 HP.',
             1: 'The dungeon stirs awake. You feel slightly less terrible.',
-            2: 'The dungeon wakes, sighs at your return, and heals you out of pity. +5 HP.',
+            2: 'The dungeon wakes, sighs at your return, and heals you out of pity. +10 HP.',
           },
           snark,
         ),
@@ -125,6 +173,14 @@ const LIMITS: Partial<Record<GameEventKind, BucketConfig>> = {
   // At most 2 goblins can be queued anyway (engine cap); don't burn tokens.
   tests_failed: { capacity: 2, refillPerMinute: 0.5 },
   build_failed: { capacity: 2, refillPerMinute: 0.5 },
+  // Linters run constantly (often on save); keep both directions tight.
+  lint_passed: { capacity: 1, refillPerMinute: 0.5 },
+  lint_failed: { capacity: 2, refillPerMinute: 0.5 },
+  // Commits are deliberate but can come in bursts; modest checkpoint heals.
+  committed: { capacity: 2, refillPerMinute: 0.5 },
+  // A push is the rarest, most deliberate signal; one celebratory bless at a
+  // time, refilling slowly so a CI retry storm can't farm Strength.
+  pushed: { capacity: 1, refillPerMinute: 0.25 },
   agent_spawned: { capacity: 1, refillPerMinute: 1 },
   session_started: { capacity: 1, refillPerMinute: 0.2 },
 };

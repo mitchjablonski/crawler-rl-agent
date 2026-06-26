@@ -39,6 +39,9 @@
     "test:watch": "vitest",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
+    "gif": "tsx scripts/make-gif.ts",
+    "play-verify": "tsx scripts/play-verify.ts",
+    "visual-snapshot": "tsx scripts/visual-snapshot.ts",
     "prepublishOnly": "npm run lint && npm run typecheck && npm test && npm run build"
   },
   "dependencies": {
@@ -47,13 +50,18 @@
     "react": "^18.3.1"
   },
   "devDependencies": {
+    "@napi-rs/canvas": "^1.0.0",
     "@types/node": "^20.17.0",
     "@types/react": "^18.3.0",
     "eslint": "^9.27.0",
+    "gifenc": "^1.0.3",
     "ink-testing-library": "^4.0.0",
     "tsx": "^4.19.0",
     "typescript": "^5.8.0",
     "typescript-eslint": "^8.32.0",
-    "vitest": "^2.1.0"
+    "vitest": "^4.1.9"
+  },
+  "overrides": {
+    "esbuild": "^0.28.1"
   }
 }

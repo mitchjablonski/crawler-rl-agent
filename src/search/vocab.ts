@@ -12,6 +12,8 @@ export interface VocabManifest {
   readonly cards: Readonly<Record<string, number>>;
   readonly enemies: Readonly<Record<string, number>>;
   readonly relics: Readonly<Record<string, number>>;
+  /** potion id -> slot index. Append-only (M38 mechanic). Optional for pre-M38 manifests. */
+  readonly potions?: Readonly<Record<string, number>>;
   /** Structural constants captured for compatibility / fingerprinting. */
   readonly maxEnemies: number;
   readonly maxHand: number;
@@ -58,6 +60,7 @@ export function extendManifest(
     readonly cards: object;
     readonly enemies: object;
     readonly relics: object;
+    readonly potions?: object;
   },
   maxEnemies: number,
   maxHand: number,
@@ -67,6 +70,7 @@ export function extendManifest(
     cards: extendMap(manifest.cards, Object.keys(content.cards)),
     enemies: extendMap(manifest.enemies, Object.keys(content.enemies)),
     relics: extendMap(manifest.relics, Object.keys(content.relics)),
+    potions: extendMap(manifest.potions ?? {}, Object.keys(content.potions ?? {})),
     maxEnemies,
     maxHand,
     // Preserve the closed-union signature from the input manifest (createEncoder stamps it).
@@ -95,6 +99,7 @@ export function manifestFingerprint(m: VocabManifest): string {
     `c{${canonical(m.cards)}}`,
     `n{${canonical(m.enemies)}}`,
     `r{${canonical(m.relics)}}`,
+    `p{${canonical(m.potions ?? {})}}`,
   ].join('|');
   let h = 0x811c9dc5;
   for (let i = 0; i < s.length; i++) {

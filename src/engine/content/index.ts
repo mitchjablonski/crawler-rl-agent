@@ -4,6 +4,7 @@ import { cards } from './cards.js';
 import { enemies } from './enemies.js';
 import { relics } from './relics.js';
 import { events } from './events.js';
+import { potions } from './potions.js';
 import { CHARACTERS, DEFAULT_CHARACTER } from './characters.js';
 
 export const content: ContentRegistry = Object.freeze({
@@ -11,6 +12,7 @@ export const content: ContentRegistry = Object.freeze({
   enemies,
   relics,
   events,
+  potions,
 });
 
 export { CHARACTERS, DEFAULT_CHARACTER, CHARACTER_IDS } from './characters.js';

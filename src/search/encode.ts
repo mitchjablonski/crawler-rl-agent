@@ -57,7 +57,9 @@ export type EncoderField =
   | 'phase'
   | 'nodeKind'
   | 'rowFrac'
-  | 'act';
+  | 'act'
+  | 'heldPotions'
+  | 'potionFill';
 
 /** [offset, length] for each field. A finite key union keeps access non-optional. */
 export type EncoderLayout = Readonly<
@@ -111,9 +113,11 @@ export function createEncoder(
   const cards = new Map<string, number>(Object.entries(m.cards));
   const enemies = new Map<string, number>(Object.entries(m.enemies));
   const relics = new Map<string, number>(Object.entries(m.relics));
+  const potions = new Map<string, number>(Object.entries(m.potions ?? {}));
   const C = widthOf(m.cards);
   const E = widthOf(m.enemies);
   const R = widthOf(m.relics);
+  const P = widthOf(m.potions ?? {});
   const S = STATUS_IDS.length;
 
   const layout = {} as Record<EncoderField, readonly [number, number]>;
@@ -136,6 +140,8 @@ export function createEncoder(
   add('nodeKind', NODE_KINDS.length);
   add('rowFrac', 1);
   add('act', MAX_ACTS); // which act tier (one-hot) — distinguishes arcs that rowFrac alone blurs
+  add('heldPotions', P); // bag-of-counts over the held satchel (M38 consumables)
+  add('potionFill', 1); // satchel fill fraction (held / maxPotions) — capacity awareness
   const size = off;
 
   const countInto = (
@@ -198,6 +204,10 @@ export function createEncoder(
       const i = relics.get(id);
       if (i !== undefined) v[rBase + i] = 1;
     }
+
+    // Held potions: bag-of-counts (a potion can be held more than once) + satchel fill.
+    countInto(v, layout.heldPotions[0], state.potions, potions);
+    v[layout.potionFill[0]] = state.maxPotions > 0 ? state.potions.length / state.maxPotions : 0;
 
     const p = layout.player[0];
     v[p] = state.hp / NORM.hp;

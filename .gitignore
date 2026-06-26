@@ -13,3 +13,6 @@ coverage/
 learner/.venv/
 __pycache__/
 .turbo/
+
+# Generated balance reports
+.balance/

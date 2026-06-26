@@ -77,12 +77,19 @@ export function applyPlayerEffect(
       let next = combat;
       for (let t = 0; t < times; t++) {
         const indices = targetIndices(next, effect.target, targetIndex);
-        const enemies = next.enemies.map((e, i) =>
-          indices.includes(i) && e.hp > 0
-            ? hitEnemy(e, attackDamage(effect.amount, next.playerStatuses, e.statuses))
-            : e,
-        );
-        next = { ...next, enemies };
+        // Passive, deterministic stat tracking (no rng, no behavior change):
+        // accumulate HP actually removed from enemies (post-block) and count
+        // each alive→dead transition caused by THIS player damage.
+        let dealt = 0;
+        let slain = 0;
+        const enemies = next.enemies.map((e, i) => {
+          if (!indices.includes(i) || e.hp <= 0) return e;
+          const hit = hitEnemy(e, attackDamage(effect.amount, next.playerStatuses, e.statuses));
+          dealt += e.hp - hit.hp;
+          if (hit.hp <= 0) slain += 1;
+          return hit;
+        });
+        next = { ...next, enemies, dealt: next.dealt + dealt, slain: next.slain + slain };
       }
       return next;
     }
@@ -133,10 +140,13 @@ export function applyEnemyEffect(
       const times = effect.times ?? 1;
       let next = combat;
       for (let t = 0; t < times; t++) {
+        const before = next.playerHp;
         next = hitPlayer(
           next,
           attackDamage(effect.amount, self.statuses, next.playerStatuses),
         );
+        // Passive stat tracking: HP the player actually lost (post-block).
+        next = { ...next, taken: next.taken + (before - next.playerHp) };
       }
       return next;
     }
