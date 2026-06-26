@@ -18,6 +18,28 @@ Three reference "players" span the skill ladder, and the spread between them rea
 Ablation neutralizes one item (effects stripped, kept in the pool so draw order is preserved) and
 re-measures win rate on the same seeds; the delta is its contribution.
 
+## 0. Confirmation pass — what survived the optimal agent at high run counts
+
+The initial sweep below ran on the **median (greedy)** player. Re-running the top leads with the
+**optimal agent (hybrid PUCT)** at high run counts (150 runs @1.5×; pocket-dice also 120 runs @2.0×)
+is the headline result: **most single-tier leads were tier-specific, and only one replicated.**
+
+| Lead | Greedy (median) | Optimal (high-run) | Verdict |
+| --- | --- | --- | --- |
+| **whetstone** (relic) | +3.3 | **+4.7** | ✅ **confirmed** — load-bearing across both tiers |
+| pocket-dice (relic) | −5.8 (trap) | **0.0** @2.0× | median-only **skill trap**, not an intrinsic flaw |
+| war-paint (relic) | +2.5 | 0.0 | median-only |
+| weakening-jab (card) | +5.0 | +0.7 | median **crutch**, fine for skilled play |
+| brace / caltrops (card) | +3.3 / −3.3 | +1.3 / −0.7 | noise |
+
+Takeaways: **`whetstone` is the one durable balance lead** (a real nerf candidate — confirm direction
+before acting). **`pocket-dice` is a noob-trap**, not a balance bug: it punishes unskilled play but the
+optimal agent neutralizes its downside — a *design* signal, not a number to change. And the value of
+multi-tier + confirmation is proven: 4 of 5 single-tier leads did not generalize.
+
+(Note: at 1.5× the optimal baseline is 92.7%, so +Δ is capped at ~7 pts of headroom; whetstone's +4.7
+≈ 7 runs is a solid signal, the sub-2-pt rows are within noise.)
+
 ## 1. Difficulty & skill ladder
 
 Win rate (hybrid @160 vs greedy), 20–30 seeds:
@@ -58,14 +80,16 @@ on both tiers (1.24 greedy / 1.30 optimal). Prime candidate to tune down or tele
 | moss-amulet / second-stomach / tempo-band | +1.7 | minor |
 | (15 others) | ~0 | neutral for greedy play |
 
-**`pocket-dice` is the standout finding** (≈7 runs, the most robust signal in the pass): holding it
-*lowers* win rate, i.e. it carries a downside the player can't dodge. Worth a design look.
+**`pocket-dice` is the standout *median-player* finding** (≈7 runs): holding it *lowers* greedy's win
+rate. **But it did not replicate under the optimal agent** (0.0Δ @2.0×, 120 runs — see §0): it's a
+**skill trap**, not an intrinsic balance bug. `whetstone` is the lead that survived confirmation.
 
 ## 4. Card balance (ablation, greedy @1.0×, baseline 78.3%, 60 runs)
 
 Noise floor here is ~±2–3 pts (1 run ≈ 1.7 pts), so treat only the extremes as signal:
 
-- **`weakening-jab` +5.0** — most load-bearing card for greedy (a debuff it leans on).
+- **`weakening-jab` +5.0** — most load-bearing card for greedy (a debuff it leans on). *Did not
+  replicate under the optimal agent (+0.7 @1.5×, 150 runs — §0): a median crutch, not over-tuned.*
 - `brace / goblin-stomp / rupture / second-wind / throwing-knife / twin-jab / viral-load` +3.3.
 - **`caltrops` −3.3** — mild trap for greedy play; several others at −1.7.
 
