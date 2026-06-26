@@ -45,10 +45,11 @@ then `npx tsx scripts/hybrid.ts --ckpt=.models/unified.json --acts=1,3 --difficu
 
 | Area | Modules |
 | --- | --- |
-| **Observation / actions** | `encode.ts` (state → vector; append-only vocab manifest + structural fingerprint guard), `mask.ts` (73-slot action space + masking), `env.ts` (gym-style `CrawlerEnv`: reset/step/reward) |
+| **Observation / actions** | `encode.ts` (state → vector; append-only vocab manifest + structural fingerprint guard; act one-hot + held-potion counts), `mask.ts` (122-slot action space + masking), `env.ts` (gym-style `CrawlerEnv`: reset/step/reward) |
 | **Networks** | `net.ts` (MLP + hand-derived backprop + `trainStep`/`reinforceStep`), `entityNet.ts` (attention-pooling net; backprop **gradient-checked**) |
 | **Search** | `mcts.ts`, `puct.ts` (net-guided + **hybrid** + prior dampening), `ismcts.ts` (determinized, learnable expert), `azsearch.ts` (net-guided determinized PUCT for self-play) |
 | **Training** | behavioral cloning, distillation, determinized-Q (`determinized.ts`), **DAgger** (`dagger.ts`), **AlphaZero self-play** (`selfplay.ts`), reference **REINFORCE** (`reinforce.ts`) |
+| **Balancing** | `balance.ts` (player tiers, episode metrics, usage telemetry, content ablation) + `scripts/balance-{grid,telemetry,ablation}.ts` |
 
 ## Quick start
 
@@ -69,6 +70,30 @@ npx tsx scripts/reinforce.ts --iters=80
 ```
 
 Trained checkpoints are written to `.models/` (gitignored).
+
+## Balancing the game with the agent
+
+The agent doubles as a tireless playtester. Three skill tiers act as reference "players" —
+**optimal** (hybrid PUCT), **median** (greedy heuristic), **casual** (no-search policy) — and the
+*spread between them* tells you whether outcomes are skill- or luck-driven. Three tools (greedy needs
+no model and runs instantly; pass `--ckpt … --player=hybrid` for the optimal agent):
+
+```sh
+# 1) Difficulty calibration + skill ladder: win rate / HP cost / length across difficulty × arcs × tier
+npx tsx scripts/balance-grid.ts --difficulties=1.0,1.5,2.0 --acts=1,3 --runs=30 --ckpt=.models/unified_m38.json
+
+# 2) Usage telemetry: what gets drafted/played/bought, dead vs auto-include content, enemy lethality
+npx tsx scripts/balance-telemetry.ts --runs=200 --difficulties=1.0,1.5 --acts=1,3
+
+# 3) Content ablation: per card/relic/potion win-rate delta when neutralized (power ranking)
+npx tsx scripts/balance-ablation.ts --kind=relics --runs=40 --difficulty=1.5
+```
+
+`balance-grid` finds the difficulty that lands each tier on a target win rate (and flags luck-vs-skill).
+`balance-telemetry` surfaces never-used content (buff/cut) and difficulty spikes (the most lethal enemy).
+`balance-ablation` ranks content by contribution: large +Δ = load-bearing/over-relied (nerf), ~0 =
+irrelevant/dead, −Δ = a trap the player is better off without. Caveat: the *optimal* agent measures
+intrinsic balance, not the median experience — that's why the weaker tiers run too.
 
 ## How it works (in one paragraph)
 
