@@ -16,7 +16,7 @@ import { createEncoder } from '../src/search/encode.js';
 import { ACTION_SPACE, actionMask } from '../src/search/mask.js';
 import { DEFAULT_HIDDEN, type NetParams, type TrainSample, createNet, trainStep } from '../src/search/net.js';
 import { azSearch } from '../src/search/azsearch.js';
-import { loadCheckpoint, saveCheckpoint } from '../src/search/checkpoint.js';
+import { assertCompatible, loadCheckpoint, saveCheckpoint } from '../src/search/checkpoint.js';
 import { policyWinRate } from '../src/search/policy.js';
 import { existsSync } from 'node:fs';
 
@@ -38,12 +38,16 @@ const OUT = arg('out', '.models/az.json');
 const WARM = arg('warmFrom', '');
 const DIFFICULTIES = arg('difficulties', '1.0,1.5').split(',').map(Number).filter((n) => n > 0);
 
-const enc = createEncoder(content, undefined, { positionalHand: false });
+// Build the encoder from the warm checkpoint's manifest (so vocab indices line up with the
+// loaded net's weight columns), and assert compatibility — otherwise a drifted vocab would
+// silently mis-map every input column. Cold start uses a fresh manifest.
+const warmCk = WARM && existsSync(WARM) ? loadCheckpoint(WARM) : null;
+const enc = createEncoder(content, warmCk?.manifest, { positionalHand: false });
 let net: NetParams;
-if (WARM && existsSync(WARM)) {
-  const ck = loadCheckpoint(WARM);
-  net = ck.model as NetParams;
-  console.log(`warm-started from ${WARM} (fp ${ck.fingerprint})`);
+if (warmCk) {
+  assertCompatible(warmCk, enc.manifest);
+  net = warmCk.model as NetParams;
+  console.log(`warm-started from ${WARM} (fp ${warmCk.fingerprint})`);
 } else {
   const initRng = new Rng(seedFromString('az-init'));
   net = createNet({ inputSize: enc.size, actionSize: ACTION_SPACE, hidden: HIDDEN }, () => initRng.next());
