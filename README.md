@@ -41,11 +41,28 @@ blurs) and **held-potion counts** (M38's in-combat consumables). Reproduce:
 `npx tsx scripts/unified.ts --arcs=1,3 --difficulties=1.0,1.5,2.0 --out=.models/unified.json`
 then `npx tsx scripts/hybrid.ts --ckpt=.models/unified.json --acts=1,3 --difficulties=1.0,1.5,2.0`.
 
+### One shared net plays every class
+
+The classes (Knight, Apothecary) share the entire card pool, action space, and encoder — they differ
+only in their starting deck + maxHp. So **one shared, class-conditioned net** plays all of them (no
+per-class models): the encoder adds a **class one-hot** (inferred from the surviving signature starter
+cards), and training DAggers across the `class × difficulty × arc` grid. A single net, hybrid PUCT @160:
+
+| Class | Base (1.0×) | Hard (1.5×) |
+| --- | --- | --- |
+| Knight | **100%** | **95%** |
+| Apothecary | **100%** | **80%** |
+
+This also *measures class balance*: Apothecary (fragile, 64 HP vs 70) trails Knight at every depth
+(hybrid 80% vs 95% at 1.5×; no-search 10% vs 30%) — a lead worth a designer's eye. Reproduce:
+`npx tsx scripts/unified.ts --classes=knight,apothecary --difficulties=1.0,1.5,2.0 --out=.models/unified.json`
+then `npx tsx scripts/hybrid.ts --ckpt=.models/unified.json --classes=knight,apothecary --difficulties=1.0,1.5`.
+
 ## What's here
 
 | Area | Modules |
 | --- | --- |
-| **Observation / actions** | `encode.ts` (state → vector; append-only vocab manifest + structural fingerprint guard; act one-hot + held-potion counts), `mask.ts` (122-slot action space + masking), `env.ts` (gym-style `CrawlerEnv`: reset/step/reward) |
+| **Observation / actions** | `encode.ts` (state → vector; append-only vocab manifest + structural fingerprint guard; act + class one-hot + held-potion counts), `mask.ts` (122-slot action space + masking), `env.ts` (gym-style `CrawlerEnv`: reset/step/reward) |
 | **Networks** | `net.ts` (MLP + hand-derived backprop + `trainStep`/`reinforceStep`), `entityNet.ts` (attention-pooling net; backprop **gradient-checked**) |
 | **Search** | `mcts.ts`, `puct.ts` (net-guided + **hybrid** + prior dampening), `ismcts.ts` (determinized, learnable expert), `azsearch.ts` (net-guided determinized PUCT for self-play) |
 | **Training** | behavioral cloning, distillation, determinized-Q (`determinized.ts`), **DAgger** (`dagger.ts`), **AlphaZero self-play** (`selfplay.ts`), reference **REINFORCE** (`reinforce.ts`) |
