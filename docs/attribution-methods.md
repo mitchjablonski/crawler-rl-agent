@@ -66,7 +66,7 @@ headline calls with a genuinely independent test (an optimal-agent ablation / gr
 | --- | --- | --- | --- |
 | **whirlwind** | OR 0.33 (worst card) | −5.5% (worst) | (none yet — see caveat) |
 | **troll-blood** | OR 2.43 (strong) | +3.5% (best) | — |
-| **whetstone** | OR 3.06 | — | ablation +4.7 @1.5× (independent) |
+| **whetstone** | OR 3.06 | — | optimal-agent ablation +4.7 @1.5× (a genuinely separate regime) |
 | **iron-brand** | OR 1.31 (n.s.) | — | ablation ≤0 @2.0× (weak/under-tuned) |
 
 Statistical-power caveat: with ~100 coefficients scanned and ridge-penalized (approximate) z's, the

@@ -34,7 +34,7 @@ is the headline result: **most single-tier leads were tier-specific, and only on
 
 | Lead | Greedy (median) | Optimal (high-run) | Verdict |
 | --- | --- | --- | --- |
-| **whetstone** (relic) | +3.3 | **+4.7** | ✅ **confirmed** — load-bearing across both tiers |
+| **whetstone** (relic) | +3.3 | **+4.7** | ✅ **confirmed under the optimal agent** (+4.7 @1.5×) |
 | pocket-dice (relic) | −5.8 (trap) | **0.0** @2.0× | median-only **skill trap**, not an intrinsic flaw |
 | war-paint (relic) | +2.5 | 0.0 | median-only |
 | weakening-jab (card) | +5.0 | +0.7 | median **crutch**, fine for skilled play |
@@ -79,8 +79,9 @@ Average player HP lost per combat step an enemy is on the field (greedy, 300 run
 | mimic-crate | 0.55 | 3029 |
 | lint-goblin | 0.44 | 4687 |
 
-**`the-scope-creep` is the clear outlier** — ~1.5× the next enemy and ~3× the pack average, confirmed
-on both tiers (1.24 greedy / 1.30 optimal). Prime candidate to tune down or telegraph more clearly.
+**`the-scope-creep` is the clear outlier** — ~1.5× the next enemy and ~3× the pack average, consistent
+across both tiers (1.24 greedy / 1.30 optimal; enemy threat isn't a greedy blindspot, so the agreement
+holds here). Prime candidate to tune down or telegraph more clearly.
 
 ## 3. Relic balance (ablation, greedy @1.0×, baseline 73.3%, 120 runs)
 
