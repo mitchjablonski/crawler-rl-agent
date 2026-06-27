@@ -117,13 +117,13 @@ for (let round = 0; round < ROUNDS; round++) {
   });
   // Combined selection score: mean over classes of (base + hard)/2 — rewards a net that handles
   // every class across difficulties, not one that spikes on a single cell.
-  const score = perClass.reduce((a, s) => a + (s.b + s.h) / 2, 0) / Math.max(1, perClass.length);
+  const score = perClass.reduce((a, pc) => a + (pc.b + pc.h) / 2, 0) / Math.max(1, perClass.length);
   if (score > bestScore) {
     bestScore = score;
     bestNet = cloneNet(net); // snapshot BEFORE the next round mutates `net` in place
     bestRound = round;
   }
-  const cells = perClass.map((s) => `${s.cls}(base${(s.b * 100).toFixed(0)}/hp1.5=${(s.h * 100).toFixed(0)})`).join(' ');
+  const cells = perClass.map((pc) => `${pc.cls}(base${(pc.b * 100).toFixed(0)}/hp1.5=${(pc.h * 100).toFixed(0)})`).join(' ');
   console.log(
     `round ${round}: beta=${beta.toFixed(2)} |D|=${D.length} loss=${loss.toFixed(4)} ` +
       `score=${(score * 100).toFixed(1)} no-search ${cells}`,
