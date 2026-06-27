@@ -16,6 +16,13 @@ export interface PuctOptions {
   readonly maxDepth?: number;
   /** Hybrid: if set, evaluate leaves by rolling this policy to terminal instead of the value head. */
   readonly leafRollout?: RolloutPolicy;
+  /**
+   * Fraction of the learned value head mixed into the rollout leaf value:
+   * `v = (1−leafBlend)·rollout + leafBlend·valueHead`. Only applies when `leafRollout` is set.
+   * 0 (default) = pure rollout (low bias, rollout-capped); 1 = pure value head (low variance,
+   * lifts heavy-search/brutal regimes the greedy rollout caps). Ignored without leafRollout.
+   */
+  readonly leafBlend?: number;
   /** Mix net priors toward uniform by this factor (0=pure net, 1=uniform≈pure MCTS). Guards bad priors. */
   readonly priorMix?: number;
 }
@@ -129,10 +136,15 @@ function simulate(
     node.mask = mask;
     node.actions = actions;
     node.expanded = true;
-    // Hybrid: rollout value (true-ish) vs the value head.
-    const value = opts.leafRollout
-      ? rolloutValue(content, node.state, opts.leafRollout, opts.rand)
-      : out.value;
+    // Leaf value: pure value head, a greedy rollout, or a blend of the two (leafBlend).
+    let value: number;
+    if (opts.leafRollout) {
+      const rollout = rolloutValue(content, node.state, opts.leafRollout, opts.rand);
+      const blend = opts.leafBlend ?? 0;
+      value = blend > 0 ? (1 - blend) * rollout + blend * out.value : rollout;
+    } else {
+      value = out.value;
+    }
     node.n++;
     node.w += value;
     return value;
