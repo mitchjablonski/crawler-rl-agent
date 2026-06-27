@@ -50,11 +50,15 @@ cards), and training DAggers across the `class × difficulty × arc` grid. A sin
 
 | Class | Base (1.0×) | Hard (1.5×) |
 | --- | --- | --- |
-| Knight | **100%** | **95%** |
-| Apothecary | **100%** | **80%** |
+| Knight | **100%** | **100%** |
+| Apothecary | **100%** | **100%** |
 
-This also *measures class balance*: Apothecary (fragile, 64 HP vs 70) trails Knight at every depth
-(hybrid 80% vs 95% at 1.5×; no-search 10% vs 30%) — a lead worth a designer's eye. Reproduce:
+Under search the shared net plays both classes equally well. The no-search policy is a touch weaker
+for Apothecary at hard (net-PUCT 25% vs Knight's 40%) — a mild skill-floor gap that hybrid search
+erases. (An earlier draft of this table showed Apothecary *trailing*; an adversarial review caught
+that the class and arc axes were confounded in the training sampler — Apothecary had only ever trained
+on 3-act, then was evaluated on single-act — so that "class imbalance" was a training artifact, not a
+real one. Fixing the sampler equalized them.) Reproduce:
 `npx tsx scripts/unified.ts --classes=knight,apothecary --difficulties=1.0,1.5,2.0 --out=.models/unified.json`
 then `npx tsx scripts/hybrid.ts --ckpt=.models/unified.json --classes=knight,apothecary --difficulties=1.0,1.5`.
 
