@@ -9,6 +9,7 @@ import {
   type NetConfig,
   type NetParams,
   type TrainSample,
+  cloneNet,
   createNet,
   forward,
   policyPriors,
@@ -71,6 +72,25 @@ describe('net', () => {
     let sum = 0;
     for (const p of priors) sum += p;
     expect(sum).toBe(0);
+  });
+
+  it('cloneNet is an independent deep copy (training the clone leaves the snapshot intact)', () => {
+    const cfg: NetConfig = { inputSize: 8, actionSize: ACTION_SPACE, hidden: 8 };
+    const net = createNet(cfg, seededRand('clone'));
+    const snap = cloneNet(net);
+    const x = new Float32Array(cfg.inputSize).fill(0.2);
+    expect(Array.from(forward(snap, x).policy)).toEqual(Array.from(forward(net, x).policy));
+
+    // Mutate the original via training; the snapshot must NOT change.
+    const mask = new Float32Array(ACTION_SPACE);
+    mask[0] = 1; mask[1] = 1;
+    const pi = new Float32Array(ACTION_SPACE);
+    pi[1] = 1;
+    for (let i = 0; i < 20; i++) trainStep(net, [{ x, pi, mask, z: 1 }], 0.5);
+    expect(net.w1).not.toEqual(snap.w1); // original moved
+    expect(snap.bValue).toBe(0); // snapshot untouched (b/V start at 0)
+    // Snapshot's arrays are not aliased to the original's.
+    expect(snap.wValue).not.toBe(net.wValue);
   });
 
   it('trainStep drives loss down and concentrates policy + value on the target', () => {
