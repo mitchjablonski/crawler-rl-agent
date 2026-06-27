@@ -95,5 +95,5 @@ measure at a difficulty with headroom for the tier you're testing.**
 
 ```sh
 npx tsx scripts/balance-attribution.ts --runs=3000 --difficulties=1.0,1.5,2.0 --acts=1,3
-npx tsx scripts/balance-equity.ts --ckpt=.models/unified_m38.json --states=1500
+npx tsx scripts/balance-equity.ts --ckpt=.models/unified.json --states=1500
 ```

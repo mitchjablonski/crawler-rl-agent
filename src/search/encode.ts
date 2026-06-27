@@ -214,7 +214,7 @@ export function createEncoder(
           v[b + 3 + si] = (en.statuses[s] ?? 0) / NORM.status;
         });
         const moves = content.enemies[en.defId]?.moves.length ?? 1;
-        v[b + 3 + S] = moves > 0 ? en.nextMoveIndex / moves : 0;
+        v[b + 3 + S] = moves > 0 ? Math.min(1, Math.max(0, en.nextMoveIndex / moves)) : 0;
       });
 
       // Positional hand: per-position card one-hot + present + playable, aligned to

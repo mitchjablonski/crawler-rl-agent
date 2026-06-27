@@ -54,6 +54,32 @@ describe('createEncoder', () => {
     }
   });
 
+  it('sets the act one-hot to the current act (act 0 on a fresh single-act run)', () => {
+    const v = enc.encode(createRun(content, 'enc-act', DEFAULT_RUN_CONFIG));
+    const [off, len] = enc.layout.act;
+    let ones = 0;
+    for (let i = 0; i < len; i++) ones += v[off + i] ?? 0;
+    expect(ones).toBe(1); // exactly one act bit
+    expect(v[off + 0]).toBe(1); // and it's act 0 (start node)
+  });
+
+  it('encodes held potions as counts and the satchel fill fraction', () => {
+    const base = createRun(content, 'enc-pot', DEFAULT_RUN_CONFIG);
+    const potionId = Object.keys(content.potions)[0]!;
+    // Synthesize a state holding one potion (granting one in-engine needs RNG-specific play).
+    const s = { ...base, potions: [potionId], maxPotions: 3 } as typeof base;
+    const v = enc.encode(s);
+    const [hOff, hLen] = enc.layout.heldPotions;
+    let held = 0;
+    for (let i = 0; i < hLen; i++) held += v[hOff + i] ?? 0;
+    expect(held).toBe(1); // one held potion counted
+    expect(v[enc.layout.potionFill[0]]).toBeCloseTo(1 / 3); // fill = held / maxPotions
+
+    // And empty satchel encodes to zeros.
+    const empty = enc.encode(createRun(content, 'enc-pot2', DEFAULT_RUN_CONFIG));
+    expect(empty[enc.layout.potionFill[0]]).toBe(0);
+  });
+
   it('marks exactly one phase one-hot bit', () => {
     const v = enc.encode(createRun(content, 'enc-4', DEFAULT_RUN_CONFIG));
     const [off, len] = enc.layout.phase;

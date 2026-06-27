@@ -101,7 +101,7 @@ no model and runs instantly; pass `--ckpt … --player=hybrid` for the optimal a
 
 ```sh
 # 1) Difficulty calibration + skill ladder: win rate / HP cost / length across difficulty × arcs × tier
-npx tsx scripts/balance-grid.ts --difficulties=1.0,1.5,2.0 --acts=1,3 --runs=30 --ckpt=.models/unified_m38.json
+npx tsx scripts/balance-grid.ts --difficulties=1.0,1.5,2.0 --acts=1,3 --runs=30 --ckpt=.models/unified.json
 
 # 2) Usage telemetry: what gets drafted/played/bought, dead vs auto-include content, enemy lethality
 npx tsx scripts/balance-telemetry.ts --runs=200 --difficulties=1.0,1.5 --acts=1,3
@@ -113,7 +113,7 @@ npx tsx scripts/balance-ablation.ts --kind=relics --runs=40 --difficulty=1.5
 npx tsx scripts/balance-attribution.ts --runs=3000 --difficulties=1.0,1.5,2.0 --acts=1,3
 
 # 5) Value-head equity screen: rank all cards by ΔV of adding them (survivorship-free, seconds)
-npx tsx scripts/balance-equity.ts --ckpt=.models/unified_m38.json --states=1500
+npx tsx scripts/balance-equity.ts --ckpt=.models/unified.json --states=1500
 ```
 
 `balance-grid` finds the difficulty that lands each tier on a target win rate (and flags luck-vs-skill).
