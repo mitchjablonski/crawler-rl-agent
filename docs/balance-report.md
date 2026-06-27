@@ -40,6 +40,10 @@ multi-tier + confirmation is proven: 4 of 5 single-tier leads did not generalize
 (Note: at 1.5× the optimal baseline is 92.7%, so +Δ is capped at ~7 pts of headroom; whetstone's +4.7
 ≈ 7 runs is a solid signal, the sub-2-pt rows are within noise.)
 
+→ Followed up in **[whetstone-deep-dive.md](whetstone-deep-dive.md)**: a graded sweep shows Whetstone
+is *fairly costed* (linear +1.7 pts/Strength, not a freebie), and a sibling ablation finds `war-paint`
+scales up with difficulty while `iron-brand`/`bulwark-charm` look under-tuned.
+
 ## 1. Difficulty & skill ladder
 
 Win rate (hybrid @160 vs greedy), 20–30 seeds:
