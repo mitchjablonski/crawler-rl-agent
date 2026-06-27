@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { Rng, seedFromString } from '../engine/rng.js';
-import { DEFAULT_RUN_CONFIG, content } from '../engine/content/index.js';
+import { CHARACTERS, DEFAULT_RUN_CONFIG, content } from '../engine/content/index.js';
 import {
+  classConfig,
   emptyUsage,
   evaluatePlayer,
   greedyPlayer,
@@ -42,6 +43,15 @@ describe('balance toolkit', () => {
     for (const n of u.played.values()) totalPlays += n;
     expect(totalPlays).toBeGreaterThan(0); // a full run plays at least one card
     for (const id of u.played.keys()) expect(content.cards[id]).toBeDefined();
+  });
+
+  it('classConfig swaps starter deck / maxHp / relics for the chosen class', () => {
+    const apo = CHARACTERS['apothecary']!;
+    const cfg = classConfig('apothecary', DEFAULT_RUN_CONFIG);
+    expect(cfg.starterDeck).toEqual(apo.starterDeck);
+    expect(cfg.maxHp).toBe(apo.maxHp);
+    expect(cfg.startingRelics).toEqual(apo.startingRelics);
+    expect(() => classConfig('nonesuch', DEFAULT_RUN_CONFIG)).toThrow(/unknown class/);
   });
 
   it('nerf helpers strip effects without mutating the original content', () => {

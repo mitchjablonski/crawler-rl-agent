@@ -8,13 +8,14 @@
  */
 import { Rng, seedFromString } from '../src/engine/rng.js';
 import { applyAction, createRun, type RunConfig } from '../src/engine/run.js';
-import { DEFAULT_RUN_CONFIG, content } from '../src/engine/content/index.js';
+import { CHARACTER_IDS, DEFAULT_RUN_CONFIG, content } from '../src/engine/content/index.js';
 import type { RunState } from '../src/engine/types.js';
 import { createEncoder } from '../src/search/encode.js';
 import type { NetParams } from '../src/search/net.js';
 import { loadCheckpoint } from '../src/search/checkpoint.js';
 import { puctAction } from '../src/search/puct.js';
 import { greedyRollout } from '../src/search/heuristic.js';
+import { classConfig } from '../src/search/balance.js';
 import { policyWinRate } from '../src/search/policy.js';
 
 function arg(name: string, fallback: string): string {
@@ -28,6 +29,7 @@ const RUNS = Number(arg('runs', '40'));
 const PRIOR_MIX = Number(arg('priorMix', '0'));
 const DIFFICULTIES = arg('difficulties', '1.0').split(',').map(Number);
 const ARCS = arg('acts', '1').split(',').map(Number).filter((n) => n >= 1);
+const CLASSES = arg('classes', CHARACTER_IDS.join(',')).split(',').map((s) => s.trim()).filter(Boolean);
 
 const ckpt = loadCheckpoint(CKPT);
 const enc = createEncoder(content, ckpt.manifest);
@@ -59,16 +61,18 @@ function puctWinRate(config: RunConfig, iters: number, hybrid: boolean, tag: str
   return wins / seeds.length;
 }
 
-console.log(`ckpt=${CKPT} fp=${ckpt.fingerprint} size=${enc.size} runs=${RUNS}`);
-for (const acts of ARCS) {
-  for (const d of DIFFICULTIES) {
-    const config: RunConfig = { ...DEFAULT_RUN_CONFIG, enemyHpMult: d, acts };
-    const tag = `a${acts}d${d}`;
-    console.log(`\n=== acts=${acts} enemyHpMult=${d} ===`);
-    console.log(`  no-search:        ${(policyWinRate(content, enc, net, config, seeds) * 100).toFixed(1)}%`);
-    for (const iters of ITERS) {
-      console.log(`  net-PUCT  ${iters}:    ${(puctWinRate(config, iters, false, tag) * 100).toFixed(1)}%`);
-      console.log(`  hybrid    ${iters}:    ${(puctWinRate(config, iters, true, tag) * 100).toFixed(1)}%`);
+console.log(`ckpt=${CKPT} fp=${ckpt.fingerprint} size=${enc.size} runs=${RUNS} classes=${CLASSES.join(',')}`);
+for (const cls of CLASSES) {
+  for (const acts of ARCS) {
+    for (const d of DIFFICULTIES) {
+      const config: RunConfig = classConfig(cls, { ...DEFAULT_RUN_CONFIG, enemyHpMult: d, acts });
+      const tag = `${cls}a${acts}d${d}`;
+      console.log(`\n=== class=${cls} acts=${acts} enemyHpMult=${d} ===`);
+      console.log(`  no-search:        ${(policyWinRate(content, enc, net, config, seeds) * 100).toFixed(1)}%`);
+      for (const iters of ITERS) {
+        console.log(`  net-PUCT  ${iters}:    ${(puctWinRate(config, iters, false, tag) * 100).toFixed(1)}%`);
+        console.log(`  hybrid    ${iters}:    ${(puctWinRate(config, iters, true, tag) * 100).toFixed(1)}%`);
+      }
     }
   }
 }

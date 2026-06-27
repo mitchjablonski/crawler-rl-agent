@@ -10,6 +10,7 @@
 import { applyAction, createRun, type RunConfig } from '../engine/run.js';
 import { EngineError } from '../engine/types.js';
 import type { ContentRegistry, GameAction, RunState } from '../engine/types.js';
+import { CHARACTERS } from '../engine/content/characters.js';
 import { type Encoder } from './encode.js';
 import { greedyAction, greedyRollout } from './heuristic.js';
 import { legalActions } from './legalActions.js';
@@ -19,6 +20,17 @@ import { puctAction } from './puct.js';
 
 /** A player policy: pick an action for a state. */
 export type Player = (content: ContentRegistry, state: RunState) => GameAction;
+
+/**
+ * Apply a character's class identity (starter deck + maxHp + starting relics) to a base
+ * config. A class is selected purely through these config fields — RunConfig has no
+ * `character` field — so this is the single place training/eval pick which class to play.
+ */
+export function classConfig(classId: string, base: RunConfig): RunConfig {
+  const ch = CHARACTERS[classId];
+  if (!ch) throw new Error(`unknown class '${classId}'`);
+  return { ...base, starterDeck: ch.starterDeck, maxHp: ch.maxHp, startingRelics: ch.startingRelics };
+}
 
 /** Median player: the greedy heuristic. Fast; needs no trained model. */
 export function greedyPlayer(rand: () => number): Player {

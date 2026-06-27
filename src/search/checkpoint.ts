@@ -72,6 +72,7 @@ export function assertCompatible(checkpoint: Checkpoint, current: VocabManifest)
     ['nodeKinds', checkpoint.manifest.nodeKinds, current.nodeKinds],
     ['phases', checkpoint.manifest.phases, current.phases],
     ['acts', checkpoint.manifest.acts, current.acts],
+    ['classes', checkpoint.manifest.classes, current.classes],
   ];
   for (const [name, a, b] of struct) {
     if (a !== b) throw new Error(`vocab incompatible: ${name} changed ${a} -> ${b} (retrain needed).`);
