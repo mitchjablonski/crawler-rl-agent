@@ -128,7 +128,16 @@ export function mctsExpertSearch(
     if (!node.terminal && node.untried.length > 0) {
       const idx = Math.floor(opts.rand() * node.untried.length);
       const action = node.untried.splice(idx, 1)[0] as GameAction;
-      const child = makeNode(content, applyAction(content, node.state, action), node, action);
+      // A legal action can still be rejected by the engine; drop it (it's already removed from
+      // untried) and continue this iteration rather than aborting the whole search.
+      let next: RunState;
+      try {
+        next = applyAction(content, node.state, action);
+      } catch (err) {
+        if (!(err instanceof EngineError)) throw err;
+        continue;
+      }
+      const child = makeNode(content, next, node, action);
       node.children.push(child);
       opts.collectStates?.push(child.state);
       node = child;

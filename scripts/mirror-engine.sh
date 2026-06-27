@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
 # Refresh the engine mirror from the upstream claude-code-crawler game repo.
 #
-# Pulls engine source / scripts / config updates from upstream WITHOUT touching
-# our RL additions (src/search/{encode,mask,vocab,checkpoint,net,train}*), our
-# deepPairing config (.claude, .deeppairing, .mcp.json), our project identity
-# (README.md, .github CI, docs/, .gitignore, vitest.config.ts), or upstream's dev
-# artifacts (.evolution-artifacts). Upstream-owned search files (legalActions.ts,
-# mcts.ts) ARE updated.
+# Pulls engine source / scripts / config updates from upstream WITHOUT touching our RL code.
+# src/search/ is OURS except the four upstream-owned files (legalActions{,.test}.ts,
+# mcts{,.test}.ts): we re-include those and exclude EVERYTHING ELSE under src/search/, so a
+# refresh can never clobber an RL module (an allowlist of just-the-4 instead of a fragile,
+# hand-maintained denylist of our ~25 files). Also preserved: our deepPairing config (.claude,
+# .deeppairing, .mcp.json), project identity (README.md, .github CI, docs/, .gitignore,
+# vitest.config.ts, tsconfig.scripts.json), and upstream's dev artifacts (.evolution-artifacts).
 #
 # Usage:  scripts/mirror-engine.sh [path-to-upstream]   (default: ../claudeCodeCrawler)
 set -euo pipefail
@@ -25,13 +26,10 @@ rsync -a \
   --exclude='.claude' --exclude='.deeppairing' --exclude='.mcp.json' \
   --exclude='.evolution-artifacts' --exclude='.github' \
   --exclude='README.md' --exclude='docs' --exclude='.gitignore' \
-  --exclude='vitest.config.ts' \
-  --exclude='src/search/encode.ts'     --exclude='src/search/encode.test.ts' \
-  --exclude='src/search/mask.ts'       --exclude='src/search/mask.test.ts' \
-  --exclude='src/search/vocab.ts'      --exclude='src/search/vocab.test.ts' \
-  --exclude='src/search/checkpoint.ts' --exclude='src/search/checkpoint.test.ts' \
-  --exclude='src/search/net.ts'        --exclude='src/search/net.test.ts' \
-  --exclude='src/search/train.ts' \
+  --exclude='vitest.config.ts' --exclude='tsconfig.scripts.json' \
+  --include='src/search/legalActions.ts' --include='src/search/legalActions.test.ts' \
+  --include='src/search/mcts.ts'         --include='src/search/mcts.test.ts' \
+  --exclude='src/search/*' \
   "$UPSTREAM"/ "$HERE"/
 
 echo "Installing deps..."
