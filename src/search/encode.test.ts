@@ -3,7 +3,8 @@ import { applyAction, createRun } from '../engine/run.js';
 import { DEFAULT_RUN_CONFIG, content } from '../engine/content/index.js';
 import type { GameAction, RunState } from '../engine/types.js';
 import { legalActions } from './legalActions.js';
-import { createEncoder } from './encode.js';
+import { classConfig } from './balance.js';
+import { CLASS_IDS, createEncoder } from './encode.js';
 
 function advanceToCombat(start: RunState): RunState {
   let s = start;
@@ -38,6 +39,19 @@ describe('createEncoder', () => {
     let sum = 0;
     for (let i = 0; i < len; i++) sum += v[off + i] ?? 0;
     expect(sum).toBe(s.deck.length);
+  });
+
+  it('sets the class one-hot to match the run\'s character (from starter signatures)', () => {
+    for (let ci = 0; ci < CLASS_IDS.length; ci++) {
+      const cls = CLASS_IDS[ci]!;
+      const s = createRun(content, `cls-${cls}`, classConfig(cls, DEFAULT_RUN_CONFIG));
+      const v = enc.encode(s);
+      const [off, len] = enc.layout.class;
+      let ones = 0;
+      for (let i = 0; i < len; i++) ones += v[off + i] ?? 0;
+      expect(ones).toBe(1); // exactly one class bit set
+      expect(v[off + ci]).toBe(1); // and it's the right class
+    }
   });
 
   it('marks exactly one phase one-hot bit', () => {
