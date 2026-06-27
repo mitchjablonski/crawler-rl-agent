@@ -143,11 +143,11 @@ export function mctsExpertSearch(
   const visits = new Float32Array(ACTION_SPACE);
   let best: Node | undefined;
   for (const child of root.children) {
-    if (child.action) {
-      const slot = slotOf(state, child.action);
-      if (slot !== null) visits[slot] = child.visits;
-    }
-    if (!best || child.visits > best.visits) best = child;
+    if (!child.action) continue;
+    const slot = slotOf(state, child.action);
+    if (slot === null) continue; // slot-less action can't be a training target — keep `action`
+    visits[slot] = child.visits; //   consistent with the visit distribution by only ranking
+    if (!best || child.visits > best.visits) best = child; //   representable children.
   }
   const action =
     best?.action ?? (legalActions(content, state)[0] as GameAction | undefined) ?? { type: 'endTurn' };
