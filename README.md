@@ -87,12 +87,23 @@ npx tsx scripts/balance-telemetry.ts --runs=200 --difficulties=1.0,1.5 --acts=1,
 
 # 3) Content ablation: per card/relic/potion win-rate delta when neutralized (power ranking)
 npx tsx scripts/balance-ablation.ts --kind=relics --runs=40 --difficulty=1.5
+
+# 4) Statistical attribution: one corpus -> every item's odds ratio + 95% CI (logistic regression)
+npx tsx scripts/balance-attribution.ts --runs=3000 --difficulties=1.0,1.5,2.0 --acts=1,3
+
+# 5) Value-head equity screen: rank all cards by ΔV of adding them (survivorship-free, seconds)
+npx tsx scripts/balance-equity.ts --ckpt=.models/unified_m38.json --states=1500
 ```
 
 `balance-grid` finds the difficulty that lands each tier on a target win rate (and flags luck-vs-skill).
 `balance-telemetry` surfaces never-used content (buff/cut) and difficulty spikes (the most lethal enemy).
 `balance-ablation` ranks content by contribution: large +Δ = load-bearing/over-relied (nerf), ~0 =
-irrelevant/dead, −Δ = a trap the player is better off without. Caveat: the *optimal* agent measures
+irrelevant/dead, −Δ = a trap the player is better off without. `balance-attribution` fits a logistic
+model over one large corpus to give *every* item's odds ratio + 95% CI in a single pass (the upgrade
+over one-at-a-time ablation), and `balance-equity` ranks all cards by the value head's equity swing —
+survivorship-free and seconds to run. The recommended pipeline is **equity screen → attribution →
+ablation to causally confirm the extremes**; agreement across methods is the confidence signal
+(see [`docs/attribution-methods.md`](docs/attribution-methods.md)). Caveat: the *optimal* agent measures
 intrinsic balance, not the median experience — that's why the weaker tiers run too.
 
 ## How it works (in one paragraph)
