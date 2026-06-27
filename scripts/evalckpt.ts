@@ -7,7 +7,7 @@ import { Rng, seedFromString } from '../src/engine/rng.js';
 import { DEFAULT_RUN_CONFIG, content } from '../src/engine/content/index.js';
 import { createEncoder } from '../src/search/encode.js';
 import { type NetParams } from '../src/search/net.js';
-import { loadCheckpoint } from '../src/search/checkpoint.js';
+import { assertCompatible, loadCheckpoint } from '../src/search/checkpoint.js';
 import { evaluateWinRate } from '../src/search/train.js';
 import { policyWinRate } from '../src/search/policy.js';
 
@@ -24,6 +24,7 @@ const RUNS = Number(arg('runs', '20'));
 
 const ckpt = loadCheckpoint(CKPT);
 const encoder = createEncoder(content, ckpt.manifest);
+assertCompatible(ckpt, encoder.manifest); // fail loudly on a stale checkpoint instead of mis-scoring
 const net = ckpt.model as NetParams;
 const seeds = Array.from({ length: RUNS }, (_, i) => `eval-${i}`);
 

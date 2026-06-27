@@ -31,6 +31,10 @@ const EVAL_EVERY = Number(arg('evalEvery', '10'));
 const EVAL_RUNS = Number(arg('evalRuns', '30'));
 const DIFFICULTIES = arg('difficulties', '1.0').split(',').map(Number).filter((n) => n > 0);
 const ARCS = arg('arcs', '1').split(',').map(Number).filter((n) => n >= 1);
+// Sample difficulty × arc from a single index into the Cartesian product. Indexing the two
+// axes with the same counter via parallel moduli confounds them (they lock in lockstep when
+// the arrays share a length) — one index covers every combo.
+const GRID = DIFFICULTIES.flatMap((d) => ARCS.map((acts) => ({ d, acts })));
 
 const enc = createEncoder(content, undefined, { positionalHand: false });
 const env = new CrawlerEnv(content, { encoder: enc, rewardShaping: true, gamma: GAMMA, winReward: 1, lossReward: 0 });
@@ -55,11 +59,8 @@ for (let iter = 0; iter < ITERS; iter++) {
   const raw: Array<{ x: Float32Array; mask: Float32Array; slot: number; ret: number }> = [];
   let wins = 0;
   for (let b = 0; b < BATCH; b++) {
-    const config: RunConfig = {
-      ...DEFAULT_RUN_CONFIG,
-      enemyHpMult: DIFFICULTIES[(iter * BATCH + b) % DIFFICULTIES.length] ?? 1,
-      acts: ARCS[(iter * BATCH + b) % ARCS.length] ?? 1,
-    };
+    const cell = GRID[(iter * BATCH + b) % GRID.length] ?? { d: 1, acts: 1 };
+    const config: RunConfig = { ...DEFAULT_RUN_CONFIG, enemyHpMult: cell.d, acts: cell.acts };
     let { obs, mask } = env.reset(`rl-${iter}-${b}`, config);
     const traj: Array<{ x: Float32Array; mask: Float32Array; slot: number; reward: number }> = [];
     let done = false;
