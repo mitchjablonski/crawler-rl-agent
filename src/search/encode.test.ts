@@ -4,7 +4,7 @@ import { DEFAULT_RUN_CONFIG, content } from '../engine/content/index.js';
 import type { GameAction, RunState } from '../engine/types.js';
 import { legalActions } from './legalActions.js';
 import { classConfig } from './balance.js';
-import { CLASS_IDS, createEncoder } from './encode.js';
+import { CLASS_IDS, MAX_ENEMIES, createEncoder } from './encode.js';
 
 function advanceToCombat(start: RunState): RunState {
   let s = start;
@@ -78,6 +78,28 @@ describe('createEncoder', () => {
     // And empty satchel encodes to zeros.
     const empty = enc.encode(createRun(content, 'enc-pot2', DEFAULT_RUN_CONFIG));
     expect(empty[enc.layout.potionFill[0]]).toBe(0);
+  });
+
+  it('enemyIntent widens enemy slots and telegraphs a concrete intent in combat', () => {
+    const plain = createEncoder(content);
+    const withIntent = createEncoder(content, undefined, { enemyIntent: true });
+    expect(withIntent.size).toBe(plain.size + MAX_ENEMIES * 5); // +5 intent features per enemy
+    expect(withIntent.manifest.enemyIntent).toBe(true);
+    expect(withIntent.manifest.obsSize).toBe(withIntent.size);
+
+    const s = advanceToCombat(createRun(content, 'enc-intent', DEFAULT_RUN_CONFIG));
+    expect(s.combat).not.toBeNull();
+    const v = withIntent.encode(s);
+    const [off, len] = withIntent.layout.enemySlots;
+    const slotW = len / MAX_ENEMIES; // base 10 + 5 intent
+    // Sum the attack/defend/debuff flags (slot offsets 12/13/14) across enemy slots: a combat
+    // state always has at least one enemy telegraphing an action.
+    let flags = 0;
+    for (let i = 0; i < MAX_ENEMIES; i++) {
+      const b = off + i * slotW;
+      flags += (v[b + 12] ?? 0) + (v[b + 13] ?? 0) + (v[b + 14] ?? 0);
+    }
+    expect(flags).toBeGreaterThan(0);
   });
 
   it('marks exactly one phase one-hot bit', () => {
