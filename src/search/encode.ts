@@ -43,7 +43,9 @@ export const MAX_ACTS = 3;
  */
 export const CLASS_IDS: readonly string[] = CHARACTER_IDS;
 export const MAX_CLASSES = CLASS_IDS.length;
-const CLASS_SIGNATURES: ReadonlyArray<readonly string[]> = CLASS_IDS.map((id) => {
+/** Base signature cards per class: starters unique to that class. createEncoder expands these
+ *  with their upgraded variants so a rest-site upgrade doesn't blank the class bit. */
+const CLASS_BASE_SIGNATURES: ReadonlyArray<readonly string[]> = CLASS_IDS.map((id) => {
   const own = new Set(CHARACTERS[id]?.starterDeck ?? []);
   const others = new Set(
     CLASS_IDS.filter((o) => o !== id).flatMap((o) => CHARACTERS[o]?.starterDeck ?? []),
@@ -140,6 +142,17 @@ export function createEncoder(
   const P = widthOf(m.potions ?? {});
   const S = STATUS_IDS.length;
 
+  // Expand each class's base signature with its cards' upgraded variants, so the class one-hot
+  // survives a rest-site upgrade (which swaps a deck id for its `upgradeTo`).
+  const classSignatures: string[][] = CLASS_BASE_SIGNATURES.map((sigs) => {
+    const out = new Set<string>(sigs);
+    for (const c of sigs) {
+      const up = content.cards[c]?.upgradeTo;
+      if (up) out.add(up);
+    }
+    return [...out];
+  });
+
   const layout = {} as Record<EncoderField, readonly [number, number]>;
   let off = 0;
   const add = (name: EncoderField, len: number): void => {
@@ -160,9 +173,9 @@ export function createEncoder(
   add('nodeKind', NODE_KINDS.length);
   add('rowFrac', 1);
   add('act', MAX_ACTS); // which act tier (one-hot) — distinguishes arcs that rowFrac alone blurs
-  add('class', MAX_CLASSES); // which class (one-hot) — lets one shared net condition on the character
   add('heldPotions', P); // bag-of-counts over the held satchel (M38 consumables)
   add('potionFill', 1); // satchel fill fraction (held / maxPotions) — capacity awareness
+  add('class', MAX_CLASSES); // which class (one-hot) — kept LAST so the block is purely additive
   const size = off;
 
   const countInto = (
@@ -259,15 +272,14 @@ export function createEncoder(
     const bossRow = state.map.nodes[state.map.bossId]?.row ?? 1;
     v[layout.rowFrac[0]] = (node?.row ?? 0) / Math.max(1, bossRow);
 
-    // Class one-hot: argmax over how many of each class's signature starter cards survive
-    // in the deck. Zero (unknown) if no signatures remain — the deck/maxHp encoding carries
-    // it from there. Robust early, where conditioning on the character matters most.
-    const deckIds = new Set(state.deck);
+    // Class one-hot: argmax over how many of each class's signature cards (incl. upgraded
+    // variants) survive in the master deck. Zero (unknown) if none remain — the deck/maxHp
+    // encoding carries it from there. Signature sets are tiny, so a direct scan beats a Set.
     let bestClass = -1;
     let bestCount = 0;
-    for (let ci = 0; ci < CLASS_SIGNATURES.length; ci++) {
+    for (let ci = 0; ci < classSignatures.length; ci++) {
       let count = 0;
-      for (const sig of CLASS_SIGNATURES[ci] ?? []) if (deckIds.has(sig)) count++;
+      for (const sig of classSignatures[ci] ?? []) if (state.deck.includes(sig)) count++;
       if (count > bestCount) { bestCount = count; bestClass = ci; }
     }
     if (bestClass >= 0) v[layout.class[0] + bestClass] = 1;

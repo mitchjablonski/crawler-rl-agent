@@ -45,6 +45,10 @@ const ARCS = arg('arcs', '1,3').split(',').map(Number).filter((n) => n >= 1);
 // Classes to train across. One shared, class-conditioned net plays all of them (the encoder's
 // class one-hot lets it specialize); DAgger samples the class × difficulty × arc grid.
 const CLASSES = arg('classes', CHARACTER_IDS.join(',')).split(',').map((s) => s.trim()).filter(Boolean);
+// Full Cartesian product of class × difficulty × arc, sampled as a SINGLE index. Picking the
+// three axes with parallel moduli confounds them (when arrays share a length the axes lock in
+// lockstep, e.g. class⊗arc) — one index into the product guarantees every combo is trained.
+const GRID = CLASSES.flatMap((cls) => DIFFICULTIES.flatMap((d) => ARCS.map((acts) => ({ cls, d, acts }))));
 
 const enc = createEncoder(content, undefined, { positionalHand: false });
 const initRng = new Rng(seedFromString('uni-init'));
@@ -61,9 +65,8 @@ for (let round = 0; round < ROUNDS; round++) {
   let added = 0;
   let ep = 0;
   while (added < STATES_PER_ROUND) {
-    const d = DIFFICULTIES[(round * 5 + ep) % DIFFICULTIES.length] ?? 1;
-    const acts = ARCS[(round * 3 + ep) % ARCS.length] ?? 1;
-    const cls = CLASSES[(round * 7 + ep) % CLASSES.length] ?? CHARACTER_IDS[0]!;
+    const cell = GRID[(round * 5 + ep) % GRID.length] ?? { cls: CHARACTER_IDS[0]!, d: 1, acts: 1 };
+    const { cls, d, acts } = cell;
     const config: RunConfig = classConfig(cls, { ...DEFAULT_RUN_CONFIG, enemyHpMult: d, acts });
     const useGreedy = d <= 1.0;
     let s: RunState = createRun(content, `uni-${round}-${ep}`, config);
@@ -95,16 +98,15 @@ for (let round = 0; round < ROUNDS; round++) {
   let loss = 0;
   for (let epoch = 0; epoch < EPOCHS; epoch++) loss = trainStep(net, D, LR, L2).loss;
 
-  // No-search base win rate per class — reads whether the shared net handles each.
-  const perClass = CLASSES.map(
-    (cls) => `${cls}=${(policyWinRate(content, enc, net, classConfig(cls, DEFAULT_RUN_CONFIG), evalSeeds) * 100).toFixed(0)}%`,
-  ).join(' ');
-  const hard = policyWinRate(content, enc, net, { ...DEFAULT_RUN_CONFIG, enemyHpMult: 1.5 }, evalSeeds);
-  const arc3 = policyWinRate(content, enc, net, { ...DEFAULT_RUN_CONFIG, acts: 3 }, evalSeeds);
+  // Per-class no-search base + hard win rate — reads whether the shared net handles each class
+  // (a Knight-only aggregate would hide the class it didn't train, which earlier confounding did).
+  const perClass = CLASSES.map((cls) => {
+    const b = policyWinRate(content, enc, net, classConfig(cls, DEFAULT_RUN_CONFIG), evalSeeds);
+    const h = policyWinRate(content, enc, net, classConfig(cls, { ...DEFAULT_RUN_CONFIG, enemyHpMult: 1.5 }), evalSeeds);
+    return `${cls}(base${(b * 100).toFixed(0)}/hp1.5=${(h * 100).toFixed(0)})`;
+  }).join(' ');
   console.log(
-    `round ${round}: beta=${beta.toFixed(2)} |D|=${D.length} loss=${loss.toFixed(4)} ` +
-      `no-search base[${perClass}] hp1.5=${(hard * 100).toFixed(1)}% ` +
-      `3-act=${(arc3 * 100).toFixed(1)}%`,
+    `round ${round}: beta=${beta.toFixed(2)} |D|=${D.length} loss=${loss.toFixed(4)} no-search ${perClass}`,
   );
 }
 

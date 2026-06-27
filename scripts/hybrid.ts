@@ -12,7 +12,7 @@ import { CHARACTER_IDS, DEFAULT_RUN_CONFIG, content } from '../src/engine/conten
 import type { RunState } from '../src/engine/types.js';
 import { createEncoder } from '../src/search/encode.js';
 import type { NetParams } from '../src/search/net.js';
-import { loadCheckpoint } from '../src/search/checkpoint.js';
+import { assertCompatible, loadCheckpoint } from '../src/search/checkpoint.js';
 import { puctAction } from '../src/search/puct.js';
 import { greedyRollout } from '../src/search/heuristic.js';
 import { classConfig } from '../src/search/balance.js';
@@ -33,6 +33,7 @@ const CLASSES = arg('classes', CHARACTER_IDS.join(',')).split(',').map((s) => s.
 
 const ckpt = loadCheckpoint(CKPT);
 const enc = createEncoder(content, ckpt.manifest);
+assertCompatible(ckpt, enc.manifest); // fail loudly on a stale checkpoint instead of mis-encoding
 const net = ckpt.model as NetParams;
 const seeds = Array.from({ length: RUNS }, (_, i) => `eval-${i}`);
 
