@@ -17,6 +17,7 @@ import { puctAction } from '../src/search/puct.js';
 import { greedyRollout } from '../src/search/heuristic.js';
 import { classConfig } from '../src/search/balance.js';
 import { policyWinRate } from '../src/search/policy.js';
+import { fmtRateCI } from '../src/search/stats.js';
 
 function arg(name: string, fallback: string): string {
   const hit = process.argv.find((a) => a.startsWith(`--${name}=`));
@@ -27,6 +28,8 @@ const CKPT = arg('ckpt', '.models/dagger_greedy.json');
 const ITERS = arg('iters', '160,400').split(',').map(Number);
 const RUNS = Number(arg('runs', '40'));
 const PRIOR_MIX = Number(arg('priorMix', '0'));
+// Fraction of the learned value head to mix into the hybrid rollout leaf value (0=pure rollout).
+const BLEND = Number(arg('blend', '0'));
 const DIFFICULTIES = arg('difficulties', '1.0').split(',').map(Number);
 const ARCS = arg('acts', '1').split(',').map(Number).filter((n) => n >= 1);
 const CLASSES = arg('classes', CHARACTER_IDS.join(',')).split(',').map((s) => s.trim()).filter(Boolean);
@@ -53,6 +56,7 @@ function puctWinRate(config: RunConfig, iters: number, hybrid: boolean, tag: str
           iterations: iters,
           rand,
           leafRollout: hybrid ? greedyRollout : undefined,
+          leafBlend: hybrid ? BLEND : 0,
           priorMix: PRIOR_MIX,
         }),
       );
@@ -62,17 +66,21 @@ function puctWinRate(config: RunConfig, iters: number, hybrid: boolean, tag: str
   return wins / seeds.length;
 }
 
-console.log(`ckpt=${CKPT} fp=${ckpt.fingerprint} size=${enc.size} runs=${RUNS} classes=${CLASSES.join(',')}`);
+const ci = (rate: number): string => fmtRateCI(rate, RUNS);
+console.log(
+  `ckpt=${CKPT} fp=${ckpt.fingerprint} size=${enc.size} runs=${RUNS} blend=${BLEND} ` +
+    `classes=${CLASSES.join(',')}  (win rate with 95% Wilson interval)`,
+);
 for (const cls of CLASSES) {
   for (const acts of ARCS) {
     for (const d of DIFFICULTIES) {
       const config: RunConfig = classConfig(cls, { ...DEFAULT_RUN_CONFIG, enemyHpMult: d, acts });
       const tag = `${cls}a${acts}d${d}`;
       console.log(`\n=== class=${cls} acts=${acts} enemyHpMult=${d} ===`);
-      console.log(`  no-search:        ${(policyWinRate(content, enc, net, config, seeds) * 100).toFixed(1)}%`);
+      console.log(`  no-search:        ${ci(policyWinRate(content, enc, net, config, seeds))}`);
       for (const iters of ITERS) {
-        console.log(`  net-PUCT  ${iters}:    ${(puctWinRate(config, iters, false, tag) * 100).toFixed(1)}%`);
-        console.log(`  hybrid    ${iters}:    ${(puctWinRate(config, iters, true, tag) * 100).toFixed(1)}%`);
+        console.log(`  net-PUCT  ${iters}:    ${ci(puctWinRate(config, iters, false, tag))}`);
+        console.log(`  hybrid    ${iters}:    ${ci(puctWinRate(config, iters, true, tag))}`);
       }
     }
   }

@@ -24,6 +24,11 @@ over 20 held-out seeds:
 | Hard (1.5×) | **90%** | **100%** |
 | Brutal (2.0×) | 55% | **95%** |
 
+> Read these as point estimates: at 20 seeds a 90% has a ±~13pt 95% interval, so single-cell deltas
+> are mostly within noise. `hybrid.ts` now prints the **Wilson 95% interval** next to each rate
+> (`--runs=200` for tighter bounds), and supports `--blend=λ` to mix the learned value head into the
+> rollout leaf value (`v = (1−λ)·rollout + λ·valueHead`) — aimed at the rollout-capped brutal regime.
+
 The same net, no-search vs. net-only-PUCT vs. hybrid at base (single act): **65% → 90% → 100%** — the
 search does the lookahead the single forward pass can't, and the honest rollout leaf value closes the
 last gap to 100%.
