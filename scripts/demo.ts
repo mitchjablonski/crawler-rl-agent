@@ -53,6 +53,15 @@ function describe(c: ContentRegistry, state: RunState, a: GameAction): string {
       const ev = state.event ? c.events[state.event.eventId] : undefined;
       return `Choose: ${ev?.options[a.index]?.label ?? `option ${a.index + 1}`}`;
     }
+    case 'usePotion': {
+      const id = state.potions[a.potionIndex];
+      const tgt = a.targetIndex !== undefined ? state.combat?.enemies[a.targetIndex]?.name : undefined;
+      return `Use ${id ? (c.potions[id]?.name ?? id) : 'potion'}${tgt ? ` → ${tgt}` : ''}`;
+    }
+    case 'buyPotion': { const id = state.shop?.potionStock[a.index]?.potionId; return `Buy ${id ? (c.potions[id]?.name ?? id) : 'potion'}`; }
+    case 'upgradeCard': { const id = state.deck[a.deckIndex]; return `Upgrade ${id ? cardName(c, id) : 'card'}`; }
+    case 'continueEvent': return 'Continue';
+    default: return (a as { type: string }).type;
   }
 }
 

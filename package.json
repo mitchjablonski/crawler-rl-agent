@@ -39,6 +39,7 @@
     "test:watch": "vitest",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
+    "typecheck:scripts": "tsc -p tsconfig.scripts.json",
     "gif": "tsx scripts/make-gif.ts",
     "play-verify": "tsx scripts/play-verify.ts",
     "visual-snapshot": "tsx scripts/visual-snapshot.ts",

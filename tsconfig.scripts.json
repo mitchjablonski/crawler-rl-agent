@@ -1,0 +1,18 @@
+{
+  // Type-checks OUR RL/balance scripts (which tsconfig.json's src-only include misses, so CI
+  // never caught type errors in them). The upstream-owned scripts (scripts/lib + make-gif /
+  // play-verify / visual-snapshot / playtest) are excluded — they're refreshed from the mirror
+  // and aren't ours to fix.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "."
+  },
+  "include": ["scripts", "src"],
+  "exclude": [
+    "scripts/lib",
+    "scripts/make-gif.ts",
+    "scripts/play-verify.ts",
+    "scripts/visual-snapshot.ts",
+    "scripts/playtest.ts"
+  ]
+}
