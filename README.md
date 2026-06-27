@@ -99,10 +99,13 @@ Trained checkpoints are written to `.models/` (gitignored).
 
 ## Balancing the game with the agent
 
-The agent doubles as a tireless playtester. Three skill tiers act as reference "players" —
+The agent doubles as a tireless playtester. Three reference "players" —
 **optimal** (hybrid PUCT), **median** (greedy heuristic), **casual** (no-search policy) — and the
-*spread between them* tells you whether outcomes are skill- or luck-driven. Three tools (greedy needs
-no model and runs instantly; pass `--ckpt … --player=hybrid` for the optimal agent):
+*spread between them* is suggestive of skill- vs luck-driven outcomes. (Caveat: the greedy "median"
+tier is **capability-limited** — it never uses potions/upgrades/shops — so the spread mixes a
+capability gap with a skill gap; treat potion/upgrade reads from it as blindspots, not the median
+experience.) Three tools (greedy needs no model and runs instantly; pass `--ckpt … --player=hybrid`
+for the optimal agent):
 
 ```sh
 # 1) Difficulty calibration + skill ladder: win rate / HP cost / length across difficulty × arcs × tier

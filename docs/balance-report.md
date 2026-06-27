@@ -7,16 +7,24 @@ any row with the command in its section.
 
 ## Method
 
-Three reference "players" span the skill ladder, and the spread between them reads luck-vs-skill:
+Three reference "players" span a skill ladder, and the spread between them is *suggestive* of
+luck-vs-skill — but read the "median" tier with care (see the caveat):
 
 | Tier | Policy | Reads as |
 | --- | --- | --- |
 | **optimal** | hybrid PUCT @160 sims | the skill ceiling / intrinsic difficulty |
-| **median** | greedy heuristic | a competent-but-imperfect human |
+| **median** | greedy heuristic | a fast baseline — but **capability-limited**, not a graded human |
 | **casual** | no-search policy net | a fast/careless player |
 
-Ablation neutralizes one item (effects stripped, kept in the pool so draw order is preserved) and
-re-measures win rate on the same seeds; the delta is its contribution.
+> **Caveat on the "median" tier:** the greedy heuristic never uses potions, upgrades cards, or shops
+> for potions — whole subsystems are *disabled*, not merely played worse. So an optimal-vs-greedy
+> spread mixes a *capability* gap with a *skill* gap, and any conclusion touching potions/upgrades/
+> shops is a greedy blindspot, not "the median experience." Where a finding leans on the greedy tier,
+> it's flagged. For skill-graded reads, prefer hybrid-at-low-sims over greedy.
+
+Ablation neutralizes one item (effects stripped, kept in the pool so draw order is preserved; cards
+keep their cost so they're comparable to relics/potions) and re-measures win rate; the delta is its
+contribution.
 
 ## 0. Confirmation pass — what survived the optimal agent at high run counts
 
@@ -26,7 +34,7 @@ is the headline result: **most single-tier leads were tier-specific, and only on
 
 | Lead | Greedy (median) | Optimal (high-run) | Verdict |
 | --- | --- | --- | --- |
-| **whetstone** (relic) | +3.3 | **+4.7** | ✅ **confirmed** — load-bearing across both tiers |
+| **whetstone** (relic) | +3.3 | **+4.7** | ✅ **confirmed under the optimal agent** (+4.7 @1.5×) |
 | pocket-dice (relic) | −5.8 (trap) | **0.0** @2.0× | median-only **skill trap**, not an intrinsic flaw |
 | war-paint (relic) | +2.5 | 0.0 | median-only |
 | weakening-jab (card) | +5.0 | +0.7 | median **crutch**, fine for skilled play |
@@ -71,8 +79,9 @@ Average player HP lost per combat step an enemy is on the field (greedy, 300 run
 | mimic-crate | 0.55 | 3029 |
 | lint-goblin | 0.44 | 4687 |
 
-**`the-scope-creep` is the clear outlier** — ~1.5× the next enemy and ~3× the pack average, confirmed
-on both tiers (1.24 greedy / 1.30 optimal). Prime candidate to tune down or telegraph more clearly.
+**`the-scope-creep` is the clear outlier** — ~1.5× the next enemy and ~3× the pack average, consistent
+across both tiers (1.24 greedy / 1.30 optimal; enemy threat isn't a greedy blindspot, so the agreement
+holds here). Prime candidate to tune down or telegraph more clearly.
 
 ## 3. Relic balance (ablation, greedy @1.0×, baseline 73.3%, 120 runs)
 
@@ -89,6 +98,11 @@ rate. **But it did not replicate under the optimal agent** (0.0Δ @2.0×, 120 ru
 **skill trap**, not an intrinsic balance bug. `whetstone` is the lead that survived confirmation.
 
 ## 4. Card balance (ablation, greedy @1.0×, baseline 78.3%, 60 runs)
+
+> These deltas were measured with the *older* card-nerf (effects stripped **and** cost spiked to 99,
+> which adds a "brick clogs the deck" confound). The nerf is now symmetric with relics/potions (cost
+> kept), so a re-run would shift these slightly — another reason to treat the sub-2-pt rows as noise.
+> No multiple-comparisons correction was applied across the card set; only large effects are signal.
 
 Noise floor here is ~±2–3 pts (1 run ≈ 1.7 pts), so treat only the extremes as signal:
 

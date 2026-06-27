@@ -54,18 +54,27 @@ value head learned, so it screens (confirm extremes with ablation).
 | venom-blade | +3.2% | rat-bite | −4.1% |
 | flurry-of-knives | +2.9% | throwing-knife | −3.8% |
 
-## Convergence (why this matters)
+## Convergence (and its limits)
 
-Independent methods agree on the extremes — that's the confidence we couldn't get from ablation alone:
+The methods agree on the extremes — but read the agreement with care: **attribution and the equity
+screen are NOT independent.** Both run on the greedy / low-enemy-count state distribution (the corpus
+is greedy play; the value head was trained on it), so they're largely one regime measured twice, not
+two independent confirmations. Treat agreement as *corroboration within that regime*, and confirm
+headline calls with a genuinely independent test (an optimal-agent ablation / grant-as-starter A/B).
 
-| Item | Attribution | Equity screen | Ablation (earlier) |
+| Item | Attribution | Equity screen | Independent confirm |
 | --- | --- | --- | --- |
-| **whirlwind** | OR 0.33 (worst card) | −5.5% (worst) | — | → **trap, high confidence** |
-| **troll-blood** | OR 2.43 (strong) | +3.5% (best) | — | → strong |
-| **whetstone** | OR 3.06 | — | +4.7 @1.5× | → strong (fairly costed) |
-| **iron-brand** | OR 1.31 (n.s.) | — | ≤0 @2.0× | → under-tuned |
+| **whirlwind** | OR 0.33 (worst card) | −5.5% (worst) | (none yet — see caveat) |
+| **troll-blood** | OR 2.43 (strong) | +3.5% (best) | — |
+| **whetstone** | OR 3.06 | — | optimal-agent ablation +4.7 @1.5× (a genuinely separate regime) |
+| **iron-brand** | OR 1.31 (n.s.) | — | ablation ≤0 @2.0× (weak/under-tuned) |
 
-## Confirmation: tempo-band IS overpowered (both tiers)
+Statistical-power caveat: with ~100 coefficients scanned and ridge-penalized (approximate) z's, the
+sub-2-point ablation rows and mid-table coefficients are **uncorrected for multiple comparisons** —
+high false-discovery risk. Only the large-|z| extremes (tempo-band z≈13, whirlwind z≈−6) survive any
+reasonable correction; the rest (caltrops, brace, …) are leads, not findings.
+
+## Confirmation: tempo-band is overpowered (strong at high difficulty)
 
 The attribution standout (`tempo-band`, OR 23) was confirmed with a clean grant-as-starter A/B
 (`scripts/relic-ab.ts`): grant it to every run, compare win rate with it working vs. neutralized.
@@ -79,16 +88,21 @@ aggregate.) Win-rate value *when held*:
 
 It looked playstyle-dependent at 1.5× (+6.7 for the optimal agent) — but that was the **93% ceiling
 masking it** (same headroom lesson as the potions). At 2.0×, where the optimal agent has room, it
-takes win rate **55% → 98%**. So `tempo-band` is **genuinely overpowered across skill tiers**, not a
-greedy-spam artifact — a real nerf candidate. (Mechanism: +1 Block per card played is a defensive
-engine that scales with cards/turn for everyone, and survival is the bottleneck at high difficulty.)
-The attribution tool found this in one corpus; the A/B confirmed it causally. **Lesson reinforced:
-measure at a difficulty with headroom for the tier you're testing.**
+takes win rate **55% → 98%**. So `tempo-band` is a **real nerf candidate — strongly OP at 2.0× for the
+optimal agent** (the cleanest, capability-unconfounded evidence). The huge greedy Δ (+54) is *also*
+real but partly a capability artifact: greedy spams cheap cards, maximizing a per-card-played engine,
+so it overstates the effect for skilled play. Net: well-supported as overpowered at high difficulty;
+"across all skill tiers" is **not** cleanly established because the greedy/median tier is
+capability-limited (see the tier caveat). (Mechanism: +1 Block per card played scales with cards/turn,
+and survival is the bottleneck at high difficulty.) **Lesson reinforced: measure at a difficulty with
+headroom for the tier you're testing.**
 
 ## Other leads to confirm
 
 - **`whirlwind`** — 6 AoE for 2 energy is overcosted for the typical 1–2 enemy fight; flagged a
-  **trap** by two methods. Strong buff (or cost cut) candidate.
+  trap by attribution + equity (which **share the greedy/low-enemy regime**, so this is one regime
+  measured twice — likely a real trap *in 1–2-enemy fights*, but not yet shown where AoE is intended,
+  i.e. large packs). A buff/cost-cut candidate, pending an optimal-agent confirmation.
 - **`iron-brand` / `bulwark-charm`** — under-tuned (from here + the deep-dive); buff candidates.
 
 ## Reproduce
