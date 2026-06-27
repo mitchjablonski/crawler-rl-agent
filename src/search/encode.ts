@@ -6,6 +6,7 @@ import type {
   StatusId,
 } from '../engine/types.js';
 import { CHARACTERS, CHARACTER_IDS } from '../engine/content/characters.js';
+import { resolveEnemyMove } from '../engine/enemyMoves.js';
 import {
   emptyManifest,
   extendManifest,
@@ -54,10 +55,12 @@ const CLASS_BASE_SIGNATURES: ReadonlyArray<readonly string[]> = CLASS_IDS.map((i
 });
 
 /** Denominators that keep raw magnitudes roughly in [0,1] without clipping signal. */
-const NORM = { hp: 100, block: 50, gold: 200, energy: 10, turn: 30, status: 10 } as const;
+const NORM = { hp: 100, block: 50, gold: 200, energy: 10, turn: 30, status: 10, intent: 20 } as const;
 
-/** Per enemy slot: alive flag, hp fraction, block, one scalar per status, telegraphed-move fraction. */
-const ENEMY_SLOT_WIDTH = 1 + 1 + 1 + STATUS_IDS.length + 1;
+/** Per enemy slot (base): alive flag, hp fraction, block, one scalar per status, telegraphed-move fraction. */
+const ENEMY_SLOT_BASE = 1 + 1 + 1 + STATUS_IDS.length + 1;
+/** Optional concrete-intent block per enemy: telegraphed damage, block, attack/defend/debuff flags. */
+const INTENT_WIDTH = 5;
 
 /** Per hand-position extras beyond the card one-hot: present flag, playable (cost<=energy) flag. */
 const HAND_SLOT_EXTRAS = 2;
@@ -110,6 +113,13 @@ export interface Encoder {
 export interface EncoderOptions {
   /** Encode the hand positionally (one-hot per hand position). Default true. */
   readonly positionalHand?: boolean;
+  /**
+   * Encode each enemy's CONCRETE telegraphed intent (next-move damage to the player, block it
+   * gains, attack/defend/debuff flags) instead of only the bare move-index fraction. The
+   * block-or-attack decision is the core combat call, so this is decision-relevant info the
+   * player can see. Default false (preserves the prior layout). A provided manifest's value wins.
+   */
+  readonly enemyIntent?: boolean;
 }
 
 export function createEncoder(
@@ -122,6 +132,9 @@ export function createEncoder(
   const requestedHand = (options?.positionalHand ?? true) ? MAX_HAND : 0;
   const baseManifest = manifest ?? emptyManifest(MAX_ENEMIES, requestedHand);
   const handPositions = baseManifest.maxHand;
+  // A provided manifest's enemyIntent wins (so a checkpoint reloads with its trained layout),
+  // else the option, else off (preserves the prior layout).
+  const useIntent = baseManifest.enemyIntent ?? options?.enemyIntent ?? false;
   const m: VocabManifest = {
     ...extendManifest(baseManifest, content, MAX_ENEMIES, handPositions),
     // Structural signature of the closed unions — folded into the fingerprint so a
@@ -131,7 +144,9 @@ export function createEncoder(
     phases: PHASES.length,
     acts: MAX_ACTS,
     classes: MAX_CLASSES,
+    enemyIntent: useIntent,
   };
+  const enemySlotW = ENEMY_SLOT_BASE + (useIntent ? INTENT_WIDTH : 0);
   const cards = new Map<string, number>(Object.entries(m.cards));
   const enemies = new Map<string, number>(Object.entries(m.enemies));
   const relics = new Map<string, number>(Object.entries(m.relics));
@@ -164,7 +179,7 @@ export function createEncoder(
   add('draw', C);
   add('discard', C);
   add('enemyCounts', E);
-  add('enemySlots', MAX_ENEMIES * ENEMY_SLOT_WIDTH);
+  add('enemySlots', MAX_ENEMIES * enemySlotW);
   add('handSlots', handPositions * (C + HAND_SLOT_EXTRAS));
   add('relics', R);
   add('player', 6); // hp, maxHp, block, gold, energy, turn
@@ -177,6 +192,8 @@ export function createEncoder(
   add('potionFill', 1); // satchel fill fraction (held / maxPotions) — capacity awareness
   add('class', MAX_CLASSES); // which class (one-hot) — kept LAST so the block is purely additive
   const size = off;
+  // Stamp the realized layout size into the manifest so the fingerprint/guard catches any drift.
+  const manifestWithSize: VocabManifest = { ...m, obsSize: size };
 
   const countInto = (
     v: Float32Array,
@@ -206,15 +223,37 @@ export function createEncoder(
         const ei = enemies.get(en.defId);
         if (ei !== undefined && en.hp > 0) v[ecBase + ei] = (v[ecBase + ei] ?? 0) + 1;
         if (idx >= MAX_ENEMIES) return;
-        const b = slotBase + idx * ENEMY_SLOT_WIDTH;
+        const b = slotBase + idx * enemySlotW;
         v[b] = en.hp > 0 ? 1 : 0;
         v[b + 1] = en.maxHp > 0 ? en.hp / en.maxHp : 0;
         v[b + 2] = en.block / NORM.block;
         STATUS_IDS.forEach((s, si) => {
           v[b + 3 + si] = (en.statuses[s] ?? 0) / NORM.status;
         });
-        const moves = content.enemies[en.defId]?.moves.length ?? 1;
+        const def = content.enemies[en.defId];
+        const moves = def?.moves.length ?? 1;
         v[b + 3 + S] = moves > 0 ? Math.min(1, Math.max(0, en.nextMoveIndex / moves)) : 0;
+        // Concrete telegraphed intent: base damage to the player, block the enemy gains, and
+        // attack/defend/debuff flags from the next move's effects. (Enemy strength/player
+        // vulnerable are already encoded, so the net can combine them into effective damage.)
+        if (useIntent && en.hp > 0 && def) {
+          let dmg = 0;
+          let blk = 0;
+          let debuff = 0;
+          for (const e of resolveEnemyMove(def, en)?.effects ?? []) {
+            // Enemy `damage` always hits the player (the engine ignores its target), so count all
+            // of it; block is self-gain; applyStatus to a non-self target debuffs the player.
+            if (e.kind === 'damage') dmg += e.amount * (e.times ?? 1);
+            else if (e.kind === 'block') blk += e.amount;
+            else if (e.kind === 'applyStatus' && e.target !== 'self') debuff += e.stacks;
+          }
+          const ib = b + 4 + S; // intent block starts right after the move-index fraction
+          v[ib] = dmg / NORM.intent;
+          v[ib + 1] = blk / NORM.block;
+          v[ib + 2] = dmg > 0 ? 1 : 0; // attack
+          v[ib + 3] = blk > 0 ? 1 : 0; // defend
+          v[ib + 4] = debuff > 0 ? 1 : 0; // debuff
+        }
       });
 
       // Positional hand: per-position card one-hot + present + playable, aligned to
@@ -287,5 +326,11 @@ export function createEncoder(
     return v;
   }
 
-  return { size, layout, encode, manifest: m, fingerprint: manifestFingerprint(m) };
+  return {
+    size,
+    layout,
+    encode,
+    manifest: manifestWithSize,
+    fingerprint: manifestFingerprint(manifestWithSize),
+  };
 }

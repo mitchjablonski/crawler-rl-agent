@@ -73,6 +73,9 @@ export function assertCompatible(checkpoint: Checkpoint, current: VocabManifest)
     ['phases', checkpoint.manifest.phases, current.phases],
     ['acts', checkpoint.manifest.acts, current.acts],
     ['classes', checkpoint.manifest.classes, current.classes],
+    // obsSize catches ANY layout change (enemy-intent features, vocab growth, new fields) —
+    // an old net's input width would otherwise silently mis-align against a wider vector.
+    ['obsSize', checkpoint.manifest.obsSize, current.obsSize],
   ];
   for (const [name, a, b] of struct) {
     if (a !== b) throw new Error(`vocab incompatible: ${name} changed ${a} -> ${b} (retrain needed).`);

@@ -49,8 +49,12 @@ const CLASSES = arg('classes', CHARACTER_IDS.join(',')).split(',').map((s) => s.
 // three axes with parallel moduli confounds them (when arrays share a length the axes lock in
 // lockstep, e.g. class⊗arc) — one index into the product guarantees every combo is trained.
 const GRID = CLASSES.flatMap((cls) => DIFFICULTIES.flatMap((d) => ARCS.map((acts) => ({ cls, d, acts }))));
+// Encode concrete enemy intent (telegraphed damage/block/flags)? A/B flag for the encoder-
+// sufficiency experiment: does richer combat info lift the no-search policy ceiling?
+const INTENT = arg('intent', '0') === '1';
 
-const enc = createEncoder(content, undefined, { positionalHand: false });
+const enc = createEncoder(content, undefined, { positionalHand: false, enemyIntent: INTENT });
+console.log(`encoder: obs=${enc.size} enemyIntent=${INTENT}`);
 const initRng = new Rng(seedFromString('uni-init'));
 const net: NetParams = createNet({ inputSize: enc.size, actionSize: ACTION_SPACE, hidden: HIDDEN }, () => initRng.next());
 const searchRng = (() => { const r = new Rng(seedFromString('uni-search')); return () => r.next(); })();
