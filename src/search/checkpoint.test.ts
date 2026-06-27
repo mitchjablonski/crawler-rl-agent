@@ -48,7 +48,10 @@ describe('checkpoint', () => {
       manifest: base.manifest,
       model: null,
     };
-    const drifted = { ...base.manifest, statuses: (base.manifest.statuses ?? 6) + 1 };
+    // Drift off the manifest's actual status count (not a hardcoded magic number that goes
+    // stale if the status vocabulary changes).
+    expect(base.manifest.statuses).toBeGreaterThan(0);
+    const drifted = { ...base.manifest, statuses: (base.manifest.statuses ?? 0) + 1 };
     expect(() => assertCompatible(checkpoint, drifted)).toThrow(/statuses/);
   });
 

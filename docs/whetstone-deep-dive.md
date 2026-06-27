@@ -50,8 +50,8 @@ intrinsic ceiling, not the median experience.
 ## Reproduce
 
 ```sh
-npx tsx scripts/whetstone-grade.ts --runs=120 --difficulty=2.0 --ckpt=.models/unified_m38.json
+npx tsx scripts/whetstone-grade.ts --runs=120 --difficulty=2.0 --ckpt=.models/unified.json
 npx tsx scripts/balance-ablation.ts --kind=relics \
   --only=whetstone,iron-brand,war-paint,bulwark-charm,second-stomach \
-  --runs=100 --difficulty=2.0 --ckpt=.models/unified_m38.json --player=hybrid
+  --runs=100 --difficulty=2.0 --ckpt=.models/unified.json --player=hybrid
 ```

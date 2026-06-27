@@ -1,7 +1,7 @@
 # M38 Balance Report (agent-driven)
 
 Generated with the balancing toolkit (`scripts/balance-{grid,telemetry,ablation}.ts`) against the
-M38 content and the `unified_m38` checkpoint. These are **leads, not verdicts** — sample sizes are
+M38 content and the `unified.json` checkpoint. These are **leads, not verdicts** — sample sizes are
 modest and the optimal agent measures *intrinsic* balance, not the median-player experience. Reproduce
 any row with the command in its section.
 
@@ -134,9 +134,9 @@ difficulty where the player can actually lose**, then widen runs before drawing 
 ## Reproduce
 
 ```sh
-npx tsx scripts/balance-grid.ts      --difficulties=1.0,1.5,2.0 --acts=1,3 --runs=30 --ckpt=.models/unified_m38.json
+npx tsx scripts/balance-grid.ts      --difficulties=1.0,1.5,2.0 --acts=1,3 --runs=30 --ckpt=.models/unified.json
 npx tsx scripts/balance-telemetry.ts --runs=300 --difficulties=1.0,1.5 --acts=1,3
 npx tsx scripts/balance-ablation.ts  --kind=relics  --runs=120 --difficulty=1.0
 npx tsx scripts/balance-ablation.ts  --kind=cards   --runs=60  --difficulty=1.0
-npx tsx scripts/balance-ablation.ts  --kind=potions --runs=30  --difficulty=1.5 --ckpt=.models/unified_m38.json --player=hybrid
+npx tsx scripts/balance-ablation.ts  --kind=potions --runs=30  --difficulty=1.5 --ckpt=.models/unified.json --player=hybrid
 ```
