@@ -8,11 +8,16 @@ with ablation — agreement across all three is the real confidence signal.
 
 Run ONE large corpus of games, record which content each run had + whether it won, then fit a
 **ridge logistic regression** of win on content presence (`src/search/attribution.ts`, IRLS with
-coefficient standard errors). Output: every item's odds ratio + 95% CI + significance, from a
+coefficient standard errors). Output: every item's odds ratio + an approximate 95% CI, from a
 single pass, controlling for the others and for difficulty. The game's own RNG randomizes what's
 offered/granted, which makes the coefficients closer to causal than typical observational data.
 
-**Honesty:** associational *with controls*, not pure causal — winning runs survive longer and draft
+**Honesty (1) — inference is approximate.** The SEs come from the *ridge-penalized* Hessian, so the
+coefficients are shrunk and the z / CI are penalized-Wald: they understate uncertainty and bias odds
+ratios toward 1. Use them to *rank* and *screen*, not as exact significance tests — confirm the
+extremes causally (ablation / the grant-as-starter A/B).
+
+**Honesty (2) — associational, not causal:** winning runs survive longer and draft
 more, a survivorship tilt we don't fully remove (so all relics read OR ≥ 1; the *relative* ranking
 and significance are the signal). Confirm extremes with ablation.
 
