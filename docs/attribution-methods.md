@@ -60,11 +60,28 @@ Independent methods agree on the extremes — that's the confidence we couldn't 
 | **whetstone** | OR 3.06 | — | +4.7 @1.5× | → strong (fairly costed) |
 | **iron-brand** | OR 1.31 (n.s.) | — | ≤0 @2.0× | → under-tuned |
 
-## New leads to confirm
+## Confirmation: tempo-band IS overpowered (both tiers)
 
-- **`tempo-band` (OR 23)** — "gain 1 Block per card played". The greedy corpus *spams* cheap cards,
-  so this scales absurdly; almost certainly **playstyle-dependent**. Confirm with a hybrid-agent
-  ablation — if it stays huge, it's a scaling-block outlier worth a hard look.
+The attribution standout (`tempo-band`, OR 23) was confirmed with a clean grant-as-starter A/B
+(`scripts/relic-ab.ts`): grant it to every run, compare win rate with it working vs. neutralized.
+(Plain ablation is too weak here — only ~14% of runs hold it, so removing it barely moves the
+aggregate.) Win-rate value *when held*:
+
+| Difficulty | median (greedy) Δ | optimal (hybrid) Δ |
+| --- | --- | --- |
+| 1.5× | +54.3 (75% vs 21%) | +6.7 (100% vs 93%) ← *ceiling artifact* |
+| 2.0× | +39.8 (45% vs 5%) | **+43.3 (98% vs 55%)** |
+
+It looked playstyle-dependent at 1.5× (+6.7 for the optimal agent) — but that was the **93% ceiling
+masking it** (same headroom lesson as the potions). At 2.0×, where the optimal agent has room, it
+takes win rate **55% → 98%**. So `tempo-band` is **genuinely overpowered across skill tiers**, not a
+greedy-spam artifact — a real nerf candidate. (Mechanism: +1 Block per card played is a defensive
+engine that scales with cards/turn for everyone, and survival is the bottleneck at high difficulty.)
+The attribution tool found this in one corpus; the A/B confirmed it causally. **Lesson reinforced:
+measure at a difficulty with headroom for the tier you're testing.**
+
+## Other leads to confirm
+
 - **`whirlwind`** — 6 AoE for 2 energy is overcosted for the typical 1–2 enemy fight; flagged a
   **trap** by two methods. Strong buff (or cost cut) candidate.
 - **`iron-brand` / `bulwark-charm`** — under-tuned (from here + the deep-dive); buff candidates.
