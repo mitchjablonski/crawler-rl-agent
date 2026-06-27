@@ -241,7 +241,9 @@ export function createEncoder(
           let blk = 0;
           let debuff = 0;
           for (const e of resolveEnemyMove(def, en)?.effects ?? []) {
-            if (e.kind === 'damage' && e.target !== 'self') dmg += e.amount * (e.times ?? 1);
+            // Enemy `damage` always hits the player (the engine ignores its target), so count all
+            // of it; block is self-gain; applyStatus to a non-self target debuffs the player.
+            if (e.kind === 'damage') dmg += e.amount * (e.times ?? 1);
             else if (e.kind === 'block') blk += e.amount;
             else if (e.kind === 'applyStatus' && e.target !== 'self') debuff += e.stacks;
           }

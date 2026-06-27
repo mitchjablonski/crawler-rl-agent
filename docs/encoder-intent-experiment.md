@@ -9,7 +9,9 @@ the telegraphed move's **damage / block / effect** — the core "block or attack
 ## What we added (`enemyIntent` encoder option, default off)
 
 Per enemy slot, 5 concrete-intent features from `resolveEnemyMove`: telegraphed damage to the player,
-block the enemy gains, and attack / defend / debuff flags. obs 439 → 459 (+5 × 4 enemy slots). The
+block the enemy gains, and attack / defend / debuff flags — **+5 × 4 enemy slots = +20** to the
+observation (439 → 459 in the training config, which uses `positionalHand: false`; the default
+positional-hand encoder is larger but grows by the same +20). The
 enemy's strength and the player's vulnerable are already encoded, so the net can combine them into
 effective damage. The choice is stamped in the manifest (`enemyIntent`) so a checkpoint reloads with
 its trained layout, and the new **`obsSize` fingerprint guard** catches any layout drift at load.
