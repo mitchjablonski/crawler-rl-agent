@@ -14,7 +14,7 @@ import type { GameAction, RunState } from '../src/engine/types.js';
 import { createEncoder } from '../src/search/encode.js';
 import { classConfig } from '../src/search/balance.js';
 import { ACTION_SPACE, actionMask, slotOf } from '../src/search/mask.js';
-import { DEFAULT_HIDDEN, type NetParams, type TrainSample, createNet, trainStep } from '../src/search/net.js';
+import { DEFAULT_HIDDEN, type NetParams, type TrainSample, cloneNet, createNet, trainStep } from '../src/search/net.js';
 import { greedyAction } from '../src/search/heuristic.js';
 import { ismctsSearch } from '../src/search/ismcts.js';
 import { qDeterminized } from '../src/search/determinized.js';
@@ -63,6 +63,12 @@ const mixRng = (() => { const r = new Rng(seedFromString('uni-mix')); return () 
 const evalSeeds = Array.from({ length: EVAL_RUNS }, (_, i) => `eval-${i}`);
 
 const D: TrainSample[] = [];
+// DAgger over aggregated data is non-monotonic and unstable (train loss climbs as D grows; the
+// per-round no-search win rate swings, and different classes peak in different rounds), so the
+// LAST round's net is a noisy draw. Snapshot the best-eval round and save that instead.
+let bestScore = -1;
+let bestNet: NetParams = cloneNet(net);
+let bestRound = 0;
 
 for (let round = 0; round < ROUNDS; round++) {
   const beta = round === 0 ? 1 : BETA0 * BETA_DECAY ** (round - 1);
@@ -107,12 +113,25 @@ for (let round = 0; round < ROUNDS; round++) {
   const perClass = CLASSES.map((cls) => {
     const b = policyWinRate(content, enc, net, classConfig(cls, DEFAULT_RUN_CONFIG), evalSeeds);
     const h = policyWinRate(content, enc, net, classConfig(cls, { ...DEFAULT_RUN_CONFIG, enemyHpMult: 1.5 }), evalSeeds);
-    return `${cls}(base${(b * 100).toFixed(0)}/hp1.5=${(h * 100).toFixed(0)})`;
-  }).join(' ');
+    return { cls, b, h };
+  });
+  // Combined selection score: mean over classes of (base + hard)/2 — rewards a net that handles
+  // every class across difficulties, not one that spikes on a single cell.
+  const score = perClass.reduce((a, s) => a + (s.b + s.h) / 2, 0) / Math.max(1, perClass.length);
+  if (score > bestScore) {
+    bestScore = score;
+    bestNet = cloneNet(net); // snapshot BEFORE the next round mutates `net` in place
+    bestRound = round;
+  }
+  const cells = perClass.map((s) => `${s.cls}(base${(s.b * 100).toFixed(0)}/hp1.5=${(s.h * 100).toFixed(0)})`).join(' ');
   console.log(
-    `round ${round}: beta=${beta.toFixed(2)} |D|=${D.length} loss=${loss.toFixed(4)} no-search ${perClass}`,
+    `round ${round}: beta=${beta.toFixed(2)} |D|=${D.length} loss=${loss.toFixed(4)} ` +
+      `score=${(score * 100).toFixed(1)} no-search ${cells}`,
   );
 }
 
-saveCheckpoint(OUT, enc.manifest, net);
-console.log(`saved -> ${OUT}  (then: hybrid.ts to measure search at base+hard)`);
+saveCheckpoint(OUT, enc.manifest, bestNet);
+console.log(
+  `saved BEST round ${bestRound} (score ${(bestScore * 100).toFixed(1)}) -> ${OUT}  ` +
+    `(then: hybrid.ts to measure search at base+hard)`,
+);

@@ -34,6 +34,19 @@ function xavier(fanIn: number, fanOut: number, rand: () => number): number {
   return (rand() * 2 - 1) * limit;
 }
 
+/** Deep copy of a net's parameters — snapshot it before further in-place trainStep mutation. */
+export function cloneNet(net: NetParams): NetParams {
+  return {
+    config: net.config,
+    w1: [...net.w1],
+    b1: [...net.b1],
+    wPolicy: [...net.wPolicy],
+    bPolicy: [...net.bPolicy],
+    wValue: [...net.wValue],
+    bValue: net.bValue,
+  };
+}
+
 /** Random-initialised net. `rand` is injected so init is reproducible. */
 export function createNet(config: NetConfig, rand: () => number): NetParams {
   const { inputSize, actionSize, hidden } = config;
