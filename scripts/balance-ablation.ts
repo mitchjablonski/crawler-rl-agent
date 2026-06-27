@@ -14,6 +14,9 @@
  *
  *   npx tsx scripts/balance-ablation.ts --kind=relics --runs=40 --difficulty=1.5
  *   npx tsx scripts/balance-ablation.ts --kind=cards --runs=30 --top=20 --difficulty=1.0
+ *   # targeted high-run confirmation of specific leads with the optimal agent:
+ *   npx tsx scripts/balance-ablation.ts --kind=relics --only=pocket-dice,whetstone \
+ *     --runs=150 --difficulty=1.5 --ckpt=.models/unified_m38.json --player=hybrid
  */
 import { Rng, seedFromString } from '../src/engine/rng.js';
 import { DEFAULT_RUN_CONFIG, content } from '../src/engine/content/index.js';
@@ -43,6 +46,7 @@ const DIFF = Number(arg('difficulty', '1.5'));
 const ACTS = Number(arg('acts', '1'));
 const ITERS = Number(arg('iters', '120'));
 const TOP = Number(arg('top', '0')); // 0 = all
+const ONLY = arg('only', '').split(',').map((s) => s.trim()).filter(Boolean); // restrict to these ids
 const CKPT = arg('ckpt', '');
 const PLAYER = arg('player', CKPT ? 'hybrid' : 'greedy');
 
@@ -67,11 +71,12 @@ if (PLAYER === 'greedy' || !CKPT) {
 
 const winRate = (c: ContentRegistry): number => evaluatePlayer(c, config, makePlayer(), seeds).winRate;
 
-const ids = (() => {
+let ids = (() => {
   if (KIND === 'cards') return Object.keys(content.cards).filter((id) => content.cards[id]?.rarity !== 'starter');
   if (KIND === 'potions') return Object.keys(content.potions);
   return Object.keys(content.relics);
 })().sort();
+if (ONLY.length > 0) ids = ids.filter((id) => ONLY.includes(id)); // targeted confirmation runs
 const nerf = KIND === 'cards' ? nerfCard : KIND === 'potions' ? nerfPotion : nerfRelic;
 
 console.log(`player=${PLAYER} kind=${KIND} items=${ids.length} runs=${RUNS} enemyHpMult=${DIFF} acts=${ACTS}\n`);
