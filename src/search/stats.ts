@@ -22,7 +22,7 @@ export function wilsonInterval(successes: number, n: number, z = 1.96): Interval
   return { rate: p, lo: Math.max(0, center - half), hi: Math.min(1, center + half) };
 }
 
-/** Format a win rate with its 95% Wilson interval, e.g. "90.0% [68–99]". */
+/** Format a win rate with its 95% Wilson interval, e.g. "90.0% [70–97]" for 18/20. */
 export function fmtRateCI(rate: number, n: number): string {
   const { lo, hi } = wilsonInterval(Math.round(rate * n), n);
   return `${(rate * 100).toFixed(1)}% [${(lo * 100).toFixed(0)}–${(hi * 100).toFixed(0)}]`;
