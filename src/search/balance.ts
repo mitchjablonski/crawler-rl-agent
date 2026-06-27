@@ -265,17 +265,19 @@ export function telemetryHook(u: UsageCounts) {
 // ---- Ablation: nerf a piece of content and measure the win-rate delta ----
 
 /**
- * Return a shallow clone of `content` with one card neutralized — kept in every draw
- * pool (so rng draw order is preserved) but stripped of its effects and set to a high
- * cost, i.e. a near-dead option. The win-rate delta vs. baseline is the card's
- * contribution: a big drop = load-bearing/over-relied; ~0 = irrelevant or dead content.
+ * Return a shallow clone of `content` with one card neutralized — kept in every draw pool
+ * (so rng draw order is preserved) but stripped of its effects, leaving its cost unchanged.
+ * Stripping effects only (NOT also spiking cost to 99, which would add a "brick clogs the
+ * deck" confound) matches how relics/potions are neutralized, so card vs. relic deltas are
+ * on the same scale. The win-rate delta vs. baseline is the card's contribution: a big drop =
+ * load-bearing/over-relied; ~0 = irrelevant or dead content.
  */
 export function nerfCard(content: ContentRegistry, cardId: string): ContentRegistry {
   const card = content.cards[cardId];
   if (!card) return content;
   return {
     ...content,
-    cards: { ...content.cards, [cardId]: { ...card, effects: [], cost: 99 } },
+    cards: { ...content.cards, [cardId]: { ...card, effects: [] } },
   };
 }
 

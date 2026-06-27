@@ -7,16 +7,24 @@ any row with the command in its section.
 
 ## Method
 
-Three reference "players" span the skill ladder, and the spread between them reads luck-vs-skill:
+Three reference "players" span a skill ladder, and the spread between them is *suggestive* of
+luck-vs-skill — but read the "median" tier with care (see the caveat):
 
 | Tier | Policy | Reads as |
 | --- | --- | --- |
 | **optimal** | hybrid PUCT @160 sims | the skill ceiling / intrinsic difficulty |
-| **median** | greedy heuristic | a competent-but-imperfect human |
+| **median** | greedy heuristic | a fast baseline — but **capability-limited**, not a graded human |
 | **casual** | no-search policy net | a fast/careless player |
 
-Ablation neutralizes one item (effects stripped, kept in the pool so draw order is preserved) and
-re-measures win rate on the same seeds; the delta is its contribution.
+> **Caveat on the "median" tier:** the greedy heuristic never uses potions, upgrades cards, or shops
+> for potions — whole subsystems are *disabled*, not merely played worse. So an optimal-vs-greedy
+> spread mixes a *capability* gap with a *skill* gap, and any conclusion touching potions/upgrades/
+> shops is a greedy blindspot, not "the median experience." Where a finding leans on the greedy tier,
+> it's flagged. For skill-graded reads, prefer hybrid-at-low-sims over greedy.
+
+Ablation neutralizes one item (effects stripped, kept in the pool so draw order is preserved; cards
+keep their cost so they're comparable to relics/potions) and re-measures win rate; the delta is its
+contribution.
 
 ## 0. Confirmation pass — what survived the optimal agent at high run counts
 
@@ -89,6 +97,11 @@ rate. **But it did not replicate under the optimal agent** (0.0Δ @2.0×, 120 ru
 **skill trap**, not an intrinsic balance bug. `whetstone` is the lead that survived confirmation.
 
 ## 4. Card balance (ablation, greedy @1.0×, baseline 78.3%, 60 runs)
+
+> These deltas were measured with the *older* card-nerf (effects stripped **and** cost spiked to 99,
+> which adds a "brick clogs the deck" confound). The nerf is now symmetric with relics/potions (cost
+> kept), so a re-run would shift these slightly — another reason to treat the sub-2-pt rows as noise.
+> No multiple-comparisons correction was applied across the card set; only large effects are signal.
 
 Noise floor here is ~±2–3 pts (1 run ≈ 1.7 pts), so treat only the extremes as signal:
 
