@@ -199,7 +199,8 @@ export interface UsageCounts {
   readonly potionUsed: Map<string, number>;
   /** potion id -> times bought in a shop. */
   readonly potionBought: Map<string, number>;
-  /** enemy id -> cumulative player HP lost while it was on the field. */
+  /** enemy id -> player HP lost while it was on the field, SHARED across co-occurring alive
+   *  enemies (loss/aliveCount per step) so multi-enemy fights aren't double-counted. */
   readonly enemyDamage: Map<string, number>;
   /** enemy id -> combat steps it was present for (to normalize enemyDamage). */
   readonly enemySteps: Map<string, number>;
@@ -248,12 +249,15 @@ export function telemetryHook(u: UsageCounts) {
         bump(u.potionBought, prev.shop?.potionStock[action.index]?.potionId);
         break;
     }
-    // Attribute player HP loss this step to whichever enemies were on the field.
+    // Attribute player HP loss this step across the alive enemies on the field. Splitting by
+    // the alive count (rather than crediting each the full loss) keeps the per-enemy totals from
+    // double-counting in multi-enemy fights, so the lethality metric isn't inflated.
     const loss = prev.hp - next.hp;
-    for (const e of prev.combat?.enemies ?? []) {
-      if (e.hp <= 0) continue;
+    const alive = (prev.combat?.enemies ?? []).filter((e) => e.hp > 0);
+    const share = alive.length > 0 ? loss / alive.length : 0;
+    for (const e of alive) {
       bump(u.enemySteps, e.defId);
-      if (loss > 0) bump(u.enemyDamage, e.defId, loss);
+      if (loss > 0) bump(u.enemyDamage, e.defId, share);
     }
   };
 }

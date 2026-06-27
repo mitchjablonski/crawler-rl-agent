@@ -3,7 +3,7 @@
  *
  * Runs ONE large corpus of games, records which content each run had + whether it won,
  * and fits a ridge logistic regression of win on content presence. Output: every item's
- * marginal association with winning (odds ratio + 95% CI + significance), from a single
+ * marginal association with winning (odds ratio + approximate, ridge-penalized 95% CI), from a single
  * pass — controlling for the others and for difficulty. Ranks overtuned (top +) and
  * undertuned/trap (top −) candidates together.
  *
@@ -91,5 +91,6 @@ for (const kind of ['relic', 'card', 'potion'] as const) {
   show(`${kind.toUpperCase()}S — strongest (overtuned candidates)`, top);
   show(`${kind.toUpperCase()}S — weakest / traps (undertuned candidates)`, bottom);
 }
-console.log('* = |z| ≥ 1.96 (95% significant). OR>1 helps win, <1 hurts. freq = % of runs with it.');
+console.log('* = |z| ≥ 1.96 (approx 95%, ridge-penalized Wald — shrunk/biased toward OR 1, a screen not');
+console.log('  an exact test). OR>1 helps win, <1 hurts. freq = % of runs with it (ignore for ctrl: rows).');
 console.log('Associational with controls — confirm extremes with balance-ablation.ts / balance-equity.ts.');

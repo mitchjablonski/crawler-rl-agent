@@ -10,7 +10,7 @@
 // would over-control a mediator). Treat the ranking as a screen; confirm the top/bottom
 // with ablation (causal) or the value-head equity screen (survivorship-free).
 import type { ContentRegistry, RunState } from '../engine/types.js';
-import type { RunConfig } from '../engine/run.js';
+import { createRun, type RunConfig } from '../engine/run.js';
 import { type Player, runEpisode } from './balance.js';
 
 export type FeatureKind = 'card' | 'relic' | 'potion' | 'ctrl';
@@ -54,15 +54,17 @@ export function collectCorpus(
   const X: number[][] = [];
   const y: number[] = [];
   for (const { seed, config } of specs) {
-    let last: RunState | null = null;
+    // Seed `last` with the initial state (same deterministic createRun runEpisode uses) so a
+    // zero-transition run — disproportionately a fast loss — still contributes its outcome
+    // instead of being silently dropped, which would bias win rate and every coefficient up.
+    let last: RunState = createRun(content, seed, config);
     const potionsSeen = new Set<string>();
     const m = runEpisode(content, seed, config, player, (prev, _a, next) => {
       for (const p of prev.potions) potionsSeen.add(p);
       for (const p of next.potions) potionsSeen.add(p);
       last = next;
     });
-    if (!last) continue;
-    const fin = last as RunState;
+    const fin = last;
     const deck = new Set(fin.deck);
     const relics = new Set(fin.relics);
     const row: number[] = [];
@@ -113,7 +115,8 @@ export interface Term {
   /** Log-odds change per unit (for binary features: having the item vs not). */
   readonly beta: number;
   readonly se: number;
-  /** beta / se — |z| ≳ 1.96 ≈ significant at 95%. */
+  /** beta / se. APPROXIMATE: se comes from the ridge-penalized Hessian, so beta is shrunk and
+   *  z/CI are penalized-Wald (understate uncertainty, bias OR toward 1) — a screen, not exact. */
   readonly z: number;
   /** Odds ratio exp(beta): >1 helps win, <1 hurts. */
   readonly oddsRatio: number;
@@ -133,7 +136,9 @@ export interface FitResult {
 /**
  * Fit win ~ features by ridge-penalized IRLS. Constant columns (e.g. starter content,
  * never-seen cards) are dropped — an effect can't be estimated without variation. The
- * intercept is unpenalized. Returns per-term beta, SE, z, odds ratio and 95% CI.
+ * intercept is unpenalized. Returns per-term beta, SE, z, odds ratio and 95% CI — but note
+ * SEs come from the PENALIZED Hessian, so the estimates are shrunk and the z/CI are
+ * approximate (penalized Wald): treat them as a ranking/screen, not exact frequentist tests.
  */
 export function fitLogistic(corpus: Corpus, opts: { l2?: number; maxIter?: number } = {}): FitResult {
   const l2 = opts.l2 ?? 1;
