@@ -120,6 +120,13 @@ export interface EncoderOptions {
    * player can see. Default false (preserves the prior layout). A provided manifest's value wins.
    */
   readonly enemyIntent?: boolean;
+  /**
+   * Encode each enemy's ABSOLUTE maxHp (threat scale), not just the hp/maxHp fraction. Without it the
+   * encoder is blind to difficulty — a 1× and a 2× enemy at full health are byte-identical — which is
+   * fatal for a VALUE estimator (it can't tell an easy fight from a brutal one). Default false (prior
+   * layout). A provided manifest's value wins, so a checkpoint reloads with its trained layout.
+   */
+  readonly absoluteThreat?: boolean;
 }
 
 export function createEncoder(
@@ -135,6 +142,7 @@ export function createEncoder(
   // A provided manifest's enemyIntent wins (so a checkpoint reloads with its trained layout),
   // else the option, else off (preserves the prior layout).
   const useIntent = baseManifest.enemyIntent ?? options?.enemyIntent ?? false;
+  const useThreat = baseManifest.absoluteThreat ?? options?.absoluteThreat ?? false;
   const m: VocabManifest = {
     ...extendManifest(baseManifest, content, MAX_ENEMIES, handPositions),
     // Structural signature of the closed unions — folded into the fingerprint so a
@@ -145,8 +153,9 @@ export function createEncoder(
     acts: MAX_ACTS,
     classes: MAX_CLASSES,
     enemyIntent: useIntent,
+    absoluteThreat: useThreat,
   };
-  const enemySlotW = ENEMY_SLOT_BASE + (useIntent ? INTENT_WIDTH : 0);
+  const enemySlotW = ENEMY_SLOT_BASE + (useIntent ? INTENT_WIDTH : 0) + (useThreat ? 1 : 0);
   const cards = new Map<string, number>(Object.entries(m.cards));
   const enemies = new Map<string, number>(Object.entries(m.enemies));
   const relics = new Map<string, number>(Object.entries(m.relics));
@@ -254,6 +263,10 @@ export function createEncoder(
           v[ib + 3] = blk > 0 ? 1 : 0; // defend
           v[ib + 4] = debuff > 0 ? 1 : 0; // debuff
         }
+        // Absolute maxHp (threat scale) — the difficulty signal the hp/maxHp fraction hides. Kept
+        // as the LAST per-enemy feature so the intent offsets stay fixed whether or not it's on.
+        // Gated on alive (like intent): a dead enemy is no threat → 0.
+        if (useThreat && en.hp > 0) v[b + ENEMY_SLOT_BASE + (useIntent ? INTENT_WIDTH : 0)] = en.maxHp / NORM.hp;
       });
 
       // Positional hand: per-position card one-hot + present + playable, aligned to
