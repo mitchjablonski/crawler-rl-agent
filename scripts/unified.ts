@@ -53,13 +53,17 @@ const GRID = CLASSES.flatMap((cls) => DIFFICULTIES.flatMap((d) => ARCS.map((acts
 // sufficiency experiment: does richer combat info lift the no-search policy ceiling?
 const INTENT = arg('intent', '0') === '1';
 
+// Seed tag: suffixes every rng + the training trajectory seeds so a different --seed gives an
+// INDEPENDENT training run (for replication / multi-seed evaluation). Default '' is byte-identical.
+const SEED = arg('seed', '');
+const sfx = SEED ? `-${SEED}` : '';
 const enc = createEncoder(content, undefined, { positionalHand: false, enemyIntent: INTENT });
-console.log(`encoder: obs=${enc.size} enemyIntent=${INTENT}`);
-const initRng = new Rng(seedFromString('uni-init'));
+console.log(`encoder: obs=${enc.size} enemyIntent=${INTENT} seed=${SEED || '(default)'}`);
+const initRng = new Rng(seedFromString(`uni-init${sfx}`));
 const net: NetParams = createNet({ inputSize: enc.size, actionSize: ACTION_SPACE, hidden: HIDDEN }, () => initRng.next());
-const searchRng = (() => { const r = new Rng(seedFromString('uni-search')); return () => r.next(); })();
-const qRng = (() => { const r = new Rng(seedFromString('uni-q')); return () => r.next(); })();
-const mixRng = (() => { const r = new Rng(seedFromString('uni-mix')); return () => r.next(); })();
+const searchRng = (() => { const r = new Rng(seedFromString(`uni-search${sfx}`)); return () => r.next(); })();
+const qRng = (() => { const r = new Rng(seedFromString(`uni-q${sfx}`)); return () => r.next(); })();
+const mixRng = (() => { const r = new Rng(seedFromString(`uni-mix${sfx}`)); return () => r.next(); })();
 const evalSeeds = Array.from({ length: EVAL_RUNS }, (_, i) => `eval-${i}`);
 
 const D: TrainSample[] = [];
@@ -79,7 +83,7 @@ for (let round = 0; round < ROUNDS; round++) {
     const { cls, d, acts } = cell;
     const config: RunConfig = classConfig(cls, { ...DEFAULT_RUN_CONFIG, enemyHpMult: d, acts });
     const useGreedy = d <= 1.0;
-    let s: RunState = createRun(content, `uni-${round}-${ep}`, config);
+    let s: RunState = createRun(content, `uni${sfx}-${round}-${ep}`, config);
     for (let i = 0; i < 6000 && s.phase !== 'victory' && s.phase !== 'defeat' && added < STATES_PER_ROUND; i++) {
       let expertAction: GameAction;
       let value: number;
