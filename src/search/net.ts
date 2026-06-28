@@ -139,6 +139,7 @@ export function trainStep(
   batch: readonly TrainSample[],
   lr: number,
   l2 = 0,
+  valueCoef = 1,
 ): TrainStats {
   const { inputSize, actionSize, hidden } = net.config;
   const gW1 = new Float64Array(hidden * inputSize);
@@ -191,9 +192,11 @@ export function trainStep(
       const t = s.pi[a] ?? 0;
       if (t > 0) policyLoss += -t * Math.log((p[a] ?? 0) || 1e-12);
     }
-    valueLoss += (v - s.z) * (v - s.z);
+    valueLoss += (v - s.z) * (v - s.z); // reported loss is RAW (unweighted); valueCoef scales gradients only
 
-    const dValuePre = 2 * (v - s.z) * v * (1 - v);
+    // valueCoef up-weights the value gradient (incl. its share of the shared-trunk gradient), so the
+    // value head isn't drowned out by the policy CE in the shared MLP. Default 1 = prior behavior.
+    const dValuePre = valueCoef * 2 * (v - s.z) * v * (1 - v);
     const dLogit = new Float64Array(actionSize);
     for (let a = 0; a < actionSize; a++) {
       dLogit[a] = (s.mask[a] ?? 0) > 0 ? (p[a] ?? 0) - (s.pi[a] ?? 0) : 0;
