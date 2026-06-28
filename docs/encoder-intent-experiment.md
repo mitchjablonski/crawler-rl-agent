@@ -28,31 +28,45 @@ Two unified nets trained on the same `class × difficulty × arc` DAgger grid (o
 | apothecary @1.0× | 67% [58–74] | 39% [31–48] |
 | apothecary @1.5× | 13% [8–21] | 6% [3–12] |
 
-## Result: no lift — evidence against the information hypothesis
+**⚠️ This first run was confounded** — `unified.ts` saved the *last* DAgger round, and the intent
+arm's final round drew a bad apothecary net (47% in the training log). Once that was fixed (best-round
+checkpoint selection, PR #17), the picture changed; see below.
 
-Richer combat info did **not** raise the no-search ceiling. Knight is a wash (intervals overlap);
-apothecary is *lower* with intent — though that cell is confounded (the intent arm's final DAgger
-round drew a bad apothecary net, 47% in the training log). Net read: **adding decision-relevant input
-features did not help the single-forward-pass policy**, which points the no-search ceiling at
-**target quality + DAgger instability**, not encoder information — consistent with the rest of the
-review (determinized targets are biased; the trainer's round-to-round variance is large).
+## Corrected result: a small, *seed-dependent* lift (not robust enough to adopt)
 
-**Caveat (don't over-read this):** single training draw per arm with an unstable trainer (DAgger loss
-*climbs* across rounds here), so this is suggestive, not conclusive. A clean test needs N seeds per
-arm and best-round (not last-round) selection. The point estimate could also be dragged by the larger
-input adding variance to an already-noisy fit.
+Re-ran the A/B with **best-round selection** (saves the best-eval round, not the noisy last) and
+**two independent training seeds** (`--seed`), no-search over 150 disjoint held-out seeds:
+
+| | baseline | + intent | Δ mean |
+| --- | --- | --- | --- |
+| **seed 1** | 41.7% | 46.8% | **+5.1** (intent better on every cell, strongest on hard 1.5×) |
+| **seed 2** | 48.7% | 49.5% | +0.8 (a wash; intervals overlap on every cell) |
+
+So fixing the selection noise **flipped the original "clean negative" into a small positive** — but it
+is **inconsistent across seeds** (+5pt vs ~0). Decisively, the *baseline itself* swings 41.7 → 48.7
+between seeds: **between-seed training variance (~7pt) is larger than the intent effect.** Net read:
+concrete enemy intent gives at most a marginal, unreliable lift to the no-search policy. The dominant
+factor is **training stability / variance**, not encoder information — consistent with the review
+(the trainer is noisy; best-round selection already bought a bigger, more reliable gain).
 
 ## Decision
 
-Keep `enemyIntent` **default-off** (no demonstrated benefit, +20 features of variance/cost). It stays
-available as an opt-in (`createEncoder(..., { enemyIntent: true })`, `unified.ts --intent=1`) for a
-re-test once the trainer is more stable (e.g. with bootstrapped value targets / belief-weighted
-determinization). The **`obsSize` guard** is kept regardless — it closes a real silent-mis-encode hole
-(an old net's input width would otherwise mis-align against a wider vector with no error).
+Keep `enemyIntent` **default-off**: the benefit is small and not seed-robust, and adopting it would
+invalidate every checkpoint (obsSize change) for an uncertain ~+3pt. It stays an opt-in
+(`createEncoder(..., { enemyIntent: true })`, `unified.ts --intent=1`) worth re-testing once the
+trainer is more stable (bootstrapped value targets / belief-weighted determinization) — at which point
+the seed variance should shrink and the true effect become measurable. The **`obsSize` guard** is kept
+regardless — it closes a real silent-mis-encode hole.
+
+**Lesson:** the *first* version of this experiment reached the opposite (wrong) conclusion purely from
+last-round checkpoint noise. Best-round selection + multi-seed replication + Wilson CIs were each
+necessary to get an honest read — and the honest read is "small, noisy, don't adopt yet."
 
 Reproduce:
 ```sh
-npx tsx scripts/unified.ts --intent=0 --difficulties=1.0,1.5,2.0 --arcs=1,3 --out=.models/uni_base.json
-npx tsx scripts/unified.ts --intent=1 --difficulties=1.0,1.5,2.0 --arcs=1,3 --out=.models/uni_intent.json
-# then compare no-search policyWinRate per class/difficulty over ≥120 seeds (Wilson CIs)
+for s in 1 2; do
+  npx tsx scripts/unified.ts --seed=$s --intent=0 --difficulties=1.0,1.5,2.0 --arcs=1,3 --out=.models/base_s$s.json
+  npx tsx scripts/unified.ts --seed=$s --intent=1 --difficulties=1.0,1.5,2.0 --arcs=1,3 --out=.models/intent_s$s.json
+done
+# then compare no-search policyWinRate per class/difficulty over ≥150 DISJOINT seeds (Wilson CIs)
 ```
