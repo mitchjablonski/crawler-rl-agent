@@ -192,7 +192,7 @@ export function trainStep(
       const t = s.pi[a] ?? 0;
       if (t > 0) policyLoss += -t * Math.log((p[a] ?? 0) || 1e-12);
     }
-    valueLoss += (v - s.z) * (v - s.z);
+    valueLoss += (v - s.z) * (v - s.z); // reported loss is RAW (unweighted); valueCoef scales gradients only
 
     // valueCoef up-weights the value gradient (incl. its share of the shared-trunk gradient), so the
     // value head isn't drowned out by the policy CE in the shared MLP. Default 1 = prior behavior.

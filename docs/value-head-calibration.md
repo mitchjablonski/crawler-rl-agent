@@ -40,14 +40,20 @@ We chased it methodically; **each step fixed a real, verified gap, and none fixe
    equally; in the shared-trunk MLP the policy gradient dominates the hidden layer. Up-weighted the
    value gradient (`valueCoef=5`). → value head **still** ~constant (predicts ~48.5% at both).
 
-## Conclusion: the collapse is architectural
+## Conclusion: the collapse is very likely architectural
 
 Honest targets + a difficulty-visible encoder + value-loss weighting were each *necessary* and
-*correct*, but the value head **still** won't separate easy from brutal. The remaining cause is the
+*correct*, but the value head **still** wouldn't separate easy from brutal. Having ruled out the
+target, the encoder input, and the loss weighting, the most probable remaining cause is the
 **shared-trunk architecture**: the hidden layer is shaped by the policy cross-entropy (a large,
 multi-action gradient), and a single linear value head reading those policy-features can't recover
-winnability — even when up-weighted. The fix is a **separate value network** (its own trunk), not a
-target/encoder/weighting tweak.
+winnability — even when up-weighted. The next step is a **separate value network** (its own trunk).
+
+> Evidence note: the three experiment results above (~63%, ~48.5%, the +42pt confirmations) were
+> produced by *temporary* recipe changes that this PR deliberately does **not** merge (they're
+> checkpoint-breaking and unprofitable alone). Only the diagnostic itself reproduces from this diff;
+> the three changes are reproducible by re-applying them and belong with the separate-value-head work.
+> So treat "architectural" as the strongly-indicated hypothesis the next step should test, not a proof.
 
 Pragmatically, this is *why the agent still works*: hybrid PUCT uses a **greedy rollout** for the leaf
 value, not the value head — so the strong results (100% base, etc.) never depended on the collapsed
