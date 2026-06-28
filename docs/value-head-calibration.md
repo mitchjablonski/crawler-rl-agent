@@ -76,3 +76,32 @@ Reproduce the diagnostic:
 npx tsx scripts/value-calibration.ts --ckpt=.models/unified.json --states=400 --reseeds=20 \
   --difficulties=1.0 --acts=1   # then again with --difficulties=2.0 to see the non-discrimination
 ```
+
+## Follow-up: the separate value net (architectural finding — CONFIRMED, directionally)
+
+Built the separate value network the diagnosis pointed to (`src/search/valueNet.ts` — own trunk,
+MSE-regressed on honest realized-win targets; `scripts/train-value.ts` trains + calibrates it) with the
+opt-in **absolute-threat encoder** (so it can *see* difficulty). On disjoint held-out states:
+
+| | shared-trunk head | separate value net (30-reseed targets) | realized |
+| --- | --- | --- | --- |
+| 1.0× predicted | ~48.5% | **41.4%** | 72% |
+| 2.0× predicted | ~48.5% | **19.0%** | 5% |
+| easy − hard gap | **0 (flat)** | **+22.4 pts** | +67 pts |
+
+**The separate net discriminates difficulty where the shared head was completely flat — the
+architectural diagnosis holds.** Two caveats keep this honest:
+- It's *directionally* right but **not yet well-calibrated** — it compresses the range (41/19 vs the
+  true 72/5), under-rating easy and over-rating hard. A small MLP regularized toward the mean.
+- The discrimination is **target-noise-limited**: the easy/hard gap grew 6 → 22 pts as realized-win
+  targets went from 12 → 30 re-seeds. Cleaner targets (more reseeds), more data, and capacity are the
+  path to full calibration — a tuning frontier, not a wall.
+
+So: separate trunk = necessary and confirmed; full calibration = the next increment (not yet shipped).
+The value net + threat encoder + train/calibrate harness are merged here so that work can build on a
+verified-discriminating starting point.
+
+Reproduce:
+```sh
+npx tsx scripts/train-value.ts --states=900 --val=400 --reseeds=30 --epochs=400 --hidden=192
+```
