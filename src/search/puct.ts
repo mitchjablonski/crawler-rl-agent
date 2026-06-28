@@ -23,6 +23,13 @@ export interface PuctOptions {
    * lifts heavy-search/brutal regimes the greedy rollout caps). Ignored without leafRollout.
    */
   readonly leafBlend?: number;
+  /**
+   * Leaf value estimate to use instead of the policy net's value head (which is collapsed; see
+   * docs/value-head-calibration.md). When set, this replaces `out.value` in the leaf blend — e.g. a
+   * SEPARATE value network's prediction on its own threat-aware encoding. Leaves the policy net (and
+   * its priors) untouched.
+   */
+  readonly leafValueFn?: (state: RunState) => number;
   /** Mix net priors toward uniform by this factor (0=pure net, 1=uniform≈pure MCTS). Guards bad priors. */
   readonly priorMix?: number;
 }
@@ -136,14 +143,16 @@ function simulate(
     node.mask = mask;
     node.actions = actions;
     node.expanded = true;
-    // Leaf value: pure value head, a greedy rollout, or a blend of the two (leafBlend).
+    // Leaf value: a value estimate (the policy head, or a supplied separate value net), a greedy
+    // rollout, or a blend of the two (leafBlend).
+    const headV = opts.leafValueFn ? opts.leafValueFn(node.state) : out.value;
     let value: number;
     if (opts.leafRollout) {
       const rollout = rolloutValue(content, node.state, opts.leafRollout, opts.rand);
       const blend = opts.leafBlend ?? 0;
-      value = blend > 0 ? (1 - blend) * rollout + blend * out.value : rollout;
+      value = blend > 0 ? (1 - blend) * rollout + blend * headV : rollout;
     } else {
-      value = out.value;
+      value = headV;
     }
     node.n++;
     node.w += value;

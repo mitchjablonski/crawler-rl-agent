@@ -105,3 +105,36 @@ Reproduce:
 ```sh
 npx tsx scripts/train-value.ts --states=900 --val=400 --reseeds=30 --epochs=400 --hidden=192
 ```
+
+## Pushing to full calibration: a wall — and the wire-in doesn't pay off (yet)
+
+Next we tried to *fully* calibrate the value net and wire it into the PUCT leaf.
+
+**Calibration plateaus.** Added val-based snapshot selection (pick the epoch with best held-out MSE,
+not the hardest train fit — it caught real overfitting: val MSE bottoms mid-training then rises), and
+pushed cleaner targets (45 reseeds), more data, capacity, and lower L2. ECE improved (16 → 13) and the
+easy/hard gap held (~24 pts), but **val MSE floors at ~0.09** (RMS ~0.30, far above the ~0.005 target
+noise). The net still *compresses* (easy 44% vs realized 72%). The realized-win value function — a
+function of the full deck/hp/board/map and future RNG — is **genuinely hard to learn** from this
+encoding with a small MLP; it captures coarse difficulty but not fine state value.
+
+**The wire-in doesn't help.** Wired the value net into the hybrid leaf (`puct` `leafValueFn`,
+`hybrid --valueCkpt`) and A/B'd it against pure greedy rollouts at low sims (where a good value head
+should help most), knight @2.0×:
+
+| sims | pure rollout | + value net |
+| --- | --- | --- |
+| 40 | 50% [35–65] | 55% [40–69] (blend 0.5) — neutral, CIs overlap |
+| 24 | 46% [36–57] | **35% [25–46] (blend 0.6) — worse** |
+
+So the partially-calibrated value net is **neutral at best and harmful at very low sims with high
+blend**: its compression injects bias the search can't overcome. This *confirms and extends* the
+Batch B leaf-blend finding — **search needs a *well*-calibrated value, not just a discriminating one**,
+and full calibration is the blocker.
+
+**What merged (correct, non-breaking, opt-in):** the val-based snapshot selection, the `puct`
+`leafValueFn` hook (default off ⇒ no behavior change), and `hybrid --valueCkpt`. The wire-in is *ready*
+for a calibrated value net. **What's still open:** cracking full calibration — likely needs richer
+state features for value (beyond threat), much more data, or better targets (n-step / bootstrapped
+returns) rather than single-policy MC. That's the next real project; the infrastructure here is the
+foundation and the diagnostic measures progress.

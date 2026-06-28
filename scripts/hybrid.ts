@@ -16,6 +16,7 @@ import { assertCompatible, loadCheckpoint } from '../src/search/checkpoint.js';
 import { puctAction } from '../src/search/puct.js';
 import { greedyRollout } from '../src/search/heuristic.js';
 import { classConfig } from '../src/search/balance.js';
+import { type ValueNetParams, valueForward } from '../src/search/valueNet.js';
 import { policyWinRate } from '../src/search/policy.js';
 import { fmtRateCI } from '../src/search/stats.js';
 
@@ -40,6 +41,19 @@ assertCompatible(ckpt, enc.manifest); // fail loudly on a stale checkpoint inste
 const net = ckpt.model as NetParams;
 const seeds = Array.from({ length: RUNS }, (_, i) => `eval-${i}`);
 
+// Optional SEPARATE value network for the hybrid leaf (its own threat-aware encoder). When given,
+// it replaces the collapsed policy value head in the leaf blend. Requires --blend>0 to have effect.
+const VALUE_CKPT = arg('valueCkpt', '');
+let leafValueFn: ((state: RunState) => number) | undefined;
+if (VALUE_CKPT) {
+  const vck = loadCheckpoint(VALUE_CKPT);
+  const venc = createEncoder(content, vck.manifest);
+  assertCompatible(vck, venc.manifest);
+  const vnet = vck.model as ValueNetParams;
+  leafValueFn = (s: RunState): number => valueForward(vnet, venc.encode(s));
+  console.log(`value net: ${VALUE_CKPT} fp=${vck.fingerprint} obs=${venc.size}`);
+}
+
 function puctWinRate(config: RunConfig, iters: number, hybrid: boolean, tag: string): number {
   let wins = 0;
   for (const seed of seeds) {
@@ -57,6 +71,7 @@ function puctWinRate(config: RunConfig, iters: number, hybrid: boolean, tag: str
           rand,
           leafRollout: hybrid ? greedyRollout : undefined,
           leafBlend: hybrid ? BLEND : 0,
+          leafValueFn: hybrid ? leafValueFn : undefined,
           priorMix: PRIOR_MIX,
         }),
       );
