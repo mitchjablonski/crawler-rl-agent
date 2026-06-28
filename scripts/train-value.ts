@@ -5,8 +5,9 @@
  * outcomes, should instead DISCRIMINATE easy from brutal. We train it and print the calibration to
  * prove it (or not).
  *
- * Targets are realizedWin (greedy MC over re-seeded futures) — honest and calibrated by construction;
- * the question is whether a separate net can LEARN to track it where the shared head could not.
+ * Targets are realizedWin (greedy MC over re-seeded futures) — an UNBIASED estimate of the win
+ * probability (though noisy at finite reseeds); the question is whether a separate net can LEARN to
+ * track it where the shared head could not.
  *
  *   npx tsx scripts/train-value.ts --states=800 --val=400 --reseeds=15 --epochs=300
  */

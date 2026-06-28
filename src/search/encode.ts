@@ -265,7 +265,8 @@ export function createEncoder(
         }
         // Absolute maxHp (threat scale) — the difficulty signal the hp/maxHp fraction hides. Kept
         // as the LAST per-enemy feature so the intent offsets stay fixed whether or not it's on.
-        if (useThreat) v[b + ENEMY_SLOT_BASE + (useIntent ? INTENT_WIDTH : 0)] = en.maxHp / NORM.hp;
+        // Gated on alive (like intent): a dead enemy is no threat → 0.
+        if (useThreat && en.hp > 0) v[b + ENEMY_SLOT_BASE + (useIntent ? INTENT_WIDTH : 0)] = en.maxHp / NORM.hp;
       });
 
       // Positional hand: per-position card one-hot + present + playable, aligned to
