@@ -35,9 +35,6 @@ const BETA0 = Number(arg('beta0', '0.6'));
 const BETA_DECAY = Number(arg('betaDecay', '0.6'));
 const LR = Number(arg('lr', '0.02'));
 const L2 = Number(arg('l2', '0.0001'));
-// Up-weight the value loss so the value head isn't drowned by the policy CE in the shared trunk
-// (verified: it collapses to a near-constant ~50% otherwise, even with honest targets + threat input).
-const VALUE_COEF = Number(arg('valueCoef', '5'));
 const HIDDEN = Number(arg('hidden', String(DEFAULT_HIDDEN)));
 const EVAL_RUNS = Number(arg('evalRuns', '30'));
 const OUT = arg('out', '.models/unified.json');
@@ -90,17 +87,15 @@ for (let round = 0; round < ROUNDS; round++) {
     let s: RunState = createRun(content, `uni${sfx}-${round}-${ep}`, config);
     for (let i = 0; i < 6000 && s.phase !== 'victory' && s.phase !== 'defeat' && added < STATES_PER_ROUND; i++) {
       let expertAction: GameAction;
+      let value: number;
       if (useGreedy) {
         expertAction = greedyAction(s, content, searchRng);
+        value = qDeterminized(content, s, expertAction, K, qRng);
       } else {
-        expertAction = ismctsSearch(content, s, { iterations: ISMCTS_ITERS, rand: searchRng }).action;
+        const res = ismctsSearch(content, s, { iterations: ISMCTS_ITERS, rand: searchRng });
+        expertAction = res.action;
+        value = res.rootValue;
       }
-      // VALUE TARGET: the honest realized win of the expert action over re-seeded futures
-      // (qDeterminized), at EVERY difficulty. The old ISMCTS rootValue was grossly overconfident at
-      // hard difficulty (~0.5 vs ~0.08 realized — strategy fusion), which collapsed the value head to
-      // a non-discriminating ~50%. qDeterminized is an unbiased MC estimate, so the value head can
-      // learn calibrated, difficulty-aware values. (Policy target still comes from the expert action.)
-      const value = qDeterminized(content, s, expertAction, K, qRng);
       const slot = slotOf(s, expertAction);
       const { mask } = actionMask(content, s);
       if (slot !== null) {
@@ -116,7 +111,7 @@ for (let round = 0; round < ROUNDS; round++) {
   }
 
   let loss = 0;
-  for (let epoch = 0; epoch < EPOCHS; epoch++) loss = trainStep(net, D, LR, L2, VALUE_COEF).loss;
+  for (let epoch = 0; epoch < EPOCHS; epoch++) loss = trainStep(net, D, LR, L2).loss;
 
   // Per-class no-search base + hard win rate — reads whether the shared net handles each class
   // (a Knight-only aggregate would hide the class it didn't train, which earlier confounding did).

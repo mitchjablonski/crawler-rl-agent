@@ -57,11 +57,8 @@ const CLASS_BASE_SIGNATURES: ReadonlyArray<readonly string[]> = CLASS_IDS.map((i
 /** Denominators that keep raw magnitudes roughly in [0,1] without clipping signal. */
 const NORM = { hp: 100, block: 50, gold: 200, energy: 10, turn: 30, status: 10, intent: 20 } as const;
 
-/** Per enemy slot (base): alive flag, hp fraction, block, one scalar per status, telegraphed-move
- *  fraction, ABSOLUTE maxHp. The absolute maxHp is what lets the net see difficulty/threat — hp is
- *  otherwise only a hp/maxHp *fraction*, so a 1× and a 2× enemy at full health were byte-identical,
- *  which collapsed the value head to a non-discriminating ~50% regardless of how hard the fight is. */
-const ENEMY_SLOT_BASE = 1 + 1 + 1 + STATUS_IDS.length + 1 + 1;
+/** Per enemy slot (base): alive flag, hp fraction, block, one scalar per status, telegraphed-move fraction. */
+const ENEMY_SLOT_BASE = 1 + 1 + 1 + STATUS_IDS.length + 1;
 /** Optional concrete-intent block per enemy: telegraphed damage, block, attack/defend/debuff flags. */
 const INTENT_WIDTH = 5;
 
@@ -236,8 +233,6 @@ export function createEncoder(
         const def = content.enemies[en.defId];
         const moves = def?.moves.length ?? 1;
         v[b + 3 + S] = moves > 0 ? Math.min(1, Math.max(0, en.nextMoveIndex / moves)) : 0;
-        // Absolute maxHp (threat scale) — the difficulty signal the hp/maxHp fraction hides.
-        v[b + 4 + S] = en.maxHp / NORM.hp;
         // Concrete telegraphed intent: base damage to the player, block the enemy gains, and
         // attack/defend/debuff flags from the next move's effects. (Enemy strength/player
         // vulnerable are already encoded, so the net can combine them into effective damage.)
@@ -252,7 +247,7 @@ export function createEncoder(
             else if (e.kind === 'block') blk += e.amount;
             else if (e.kind === 'applyStatus' && e.target !== 'self') debuff += e.stacks;
           }
-          const ib = b + 5 + S; // intent block: after move-frac (3+S) and absolute maxHp (4+S)
+          const ib = b + 4 + S; // intent block starts right after the move-index fraction
           v[ib] = dmg / NORM.intent;
           v[ib + 1] = blk / NORM.block;
           v[ib + 2] = dmg > 0 ? 1 : 0; // attack
