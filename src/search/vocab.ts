@@ -28,6 +28,8 @@ export interface VocabManifest {
   /** Whether per-enemy concrete-intent features are encoded. Stamped by createEncoder so a
    *  checkpoint reloads with the same layout (like maxHand recovers positionalHand). */
   readonly enemyIntent?: boolean;
+  /** Whether per-enemy absolute maxHp (threat scale) is encoded. Stamped by createEncoder. */
+  readonly absoluteThreat?: boolean;
   /** Total observation-vector length. Stamped by createEncoder; folded into the fingerprint so
    *  ANY layout change (new fields, enemy-slot width, vocab growth) is caught at load, not silently mis-encoded. */
   readonly obsSize?: number;
@@ -88,6 +90,7 @@ export function extendManifest(
     acts: manifest.acts,
     classes: manifest.classes,
     enemyIntent: manifest.enemyIntent,
+    absoluteThreat: manifest.absoluteThreat,
     obsSize: manifest.obsSize,
   };
 }
@@ -109,6 +112,7 @@ export function manifestFingerprint(m: VocabManifest): string {
     `ac${m.acts ?? 0}`,
     `cl${m.classes ?? 0}`,
     `ei${m.enemyIntent ? 1 : 0}`,
+    `at${m.absoluteThreat ? 1 : 0}`,
     `os${m.obsSize ?? 0}`,
     `c{${canonical(m.cards)}}`,
     `n{${canonical(m.enemies)}}`,
