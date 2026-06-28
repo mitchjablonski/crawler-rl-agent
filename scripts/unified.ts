@@ -35,6 +35,9 @@ const BETA0 = Number(arg('beta0', '0.6'));
 const BETA_DECAY = Number(arg('betaDecay', '0.6'));
 const LR = Number(arg('lr', '0.02'));
 const L2 = Number(arg('l2', '0.0001'));
+// Up-weight the value loss so the value head isn't drowned by the policy CE in the shared trunk
+// (verified: it collapses to a near-constant ~50% otherwise, even with honest targets + threat input).
+const VALUE_COEF = Number(arg('valueCoef', '5'));
 const HIDDEN = Number(arg('hidden', String(DEFAULT_HIDDEN)));
 const EVAL_RUNS = Number(arg('evalRuns', '30'));
 const OUT = arg('out', '.models/unified.json');
@@ -113,7 +116,7 @@ for (let round = 0; round < ROUNDS; round++) {
   }
 
   let loss = 0;
-  for (let epoch = 0; epoch < EPOCHS; epoch++) loss = trainStep(net, D, LR, L2).loss;
+  for (let epoch = 0; epoch < EPOCHS; epoch++) loss = trainStep(net, D, LR, L2, VALUE_COEF).loss;
 
   // Per-class no-search base + hard win rate — reads whether the shared net handles each class
   // (a Knight-only aggregate would hide the class it didn't train, which earlier confounding did).
