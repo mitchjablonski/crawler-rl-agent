@@ -77,7 +77,7 @@ for (let epoch = 0; epoch < EPOCHS; epoch++) {
     nb++;
   }
   loss /= Math.max(1, nb);
-  const vm = valMse(net);
+  const vm = valData.length > 0 ? valMse(net) : loss; // fall back to train loss if no val split
   if (vm < bestVal) { bestVal = vm; best = cloneValueNet(net); }
   if (epoch % 50 === 0 || epoch === EPOCHS - 1) console.log(`  epoch ${epoch}: train MSE=${loss.toFixed(4)} val MSE=${vm.toFixed(4)}`);
 }
