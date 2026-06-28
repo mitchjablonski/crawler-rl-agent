@@ -54,7 +54,8 @@ const GRID = CLASSES.flatMap((cls) => DIFFICULTIES.flatMap((d) => ARCS.map((acts
 const INTENT = arg('intent', '0') === '1';
 
 // Seed tag: suffixes every rng + the training trajectory seeds so a different --seed gives an
-// INDEPENDENT training run (for replication / multi-seed evaluation). Default '' is byte-identical.
+// INDEPENDENT training run (for replication / multi-seed evaluation). Default '' leaves the
+// training path byte-identical to before (only a console.log token differs).
 const SEED = arg('seed', '');
 const sfx = SEED ? `-${SEED}` : '';
 const enc = createEncoder(content, undefined, { positionalHand: false, enemyIntent: INTENT });
