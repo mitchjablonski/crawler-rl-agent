@@ -87,15 +87,17 @@ for (let round = 0; round < ROUNDS; round++) {
     let s: RunState = createRun(content, `uni${sfx}-${round}-${ep}`, config);
     for (let i = 0; i < 6000 && s.phase !== 'victory' && s.phase !== 'defeat' && added < STATES_PER_ROUND; i++) {
       let expertAction: GameAction;
-      let value: number;
       if (useGreedy) {
         expertAction = greedyAction(s, content, searchRng);
-        value = qDeterminized(content, s, expertAction, K, qRng);
       } else {
-        const res = ismctsSearch(content, s, { iterations: ISMCTS_ITERS, rand: searchRng });
-        expertAction = res.action;
-        value = res.rootValue;
+        expertAction = ismctsSearch(content, s, { iterations: ISMCTS_ITERS, rand: searchRng }).action;
       }
+      // VALUE TARGET: the honest realized win of the expert action over re-seeded futures
+      // (qDeterminized), at EVERY difficulty. The old ISMCTS rootValue was grossly overconfident at
+      // hard difficulty (~0.5 vs ~0.08 realized — strategy fusion), which collapsed the value head to
+      // a non-discriminating ~50%. qDeterminized is an unbiased MC estimate, so the value head can
+      // learn calibrated, difficulty-aware values. (Policy target still comes from the expert action.)
+      const value = qDeterminized(content, s, expertAction, K, qRng);
       const slot = slotOf(s, expertAction);
       const { mask } = actionMask(content, s);
       if (slot !== null) {
