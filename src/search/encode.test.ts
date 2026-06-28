@@ -92,12 +92,12 @@ describe('createEncoder', () => {
     const v = withIntent.encode(s);
     const [off, len] = withIntent.layout.enemySlots;
     const slotW = len / MAX_ENEMIES; // base 10 + 5 intent
-    // Sum the attack/defend/debuff flags (slot offsets 12/13/14) across enemy slots: a combat
-    // state always has at least one enemy telegraphing an action.
+    // Sum the attack/defend/debuff flags (slot offsets 13/14/15 — base is now 11 wide incl.
+    // absolute maxHp) across enemy slots: a combat state always has ≥1 enemy telegraphing an action.
     let flags = 0;
     for (let i = 0; i < MAX_ENEMIES; i++) {
       const b = off + i * slotW;
-      flags += (v[b + 12] ?? 0) + (v[b + 13] ?? 0) + (v[b + 14] ?? 0);
+      flags += (v[b + 13] ?? 0) + (v[b + 14] ?? 0) + (v[b + 15] ?? 0);
     }
     expect(flags).toBeGreaterThan(0);
   });
