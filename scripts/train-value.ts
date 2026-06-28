@@ -52,12 +52,22 @@ function specs(tag: string, count: number): Array<{ seed: string; config: RunCon
 // --- collect (state, realized-win) training data ---
 console.log(`sampling ${N_TRAIN} train states + computing realized win (${RESEEDS} reseeds each)...`);
 const trainStates = sampleStates(content, greedyPlayer(rng), specs('vt', 600), STRIDE, N_TRAIN);
-const data: ValueSample[] = trainStates.map((s) => ({ x: enc.encode(s), target: realizedWin(content, s, RESEEDS, rng) }));
+const all: ValueSample[] = trainStates.map((s) => ({ x: enc.encode(s), target: realizedWin(content, s, RESEEDS, rng) }));
+// Hold out 15% for snapshot selection — pick the epoch that generalizes best (VAL MSE), not the one
+// that fits the training set hardest. Disjoint from the fresh test set used for the calibration report.
+const cut = Math.max(1, Math.floor(all.length * 0.85));
+const data = all.slice(0, cut);
+const valData = all.slice(cut);
+const valMse = (n: typeof net): number => {
+  let e = 0;
+  for (const s of valData) { const d = valueForward(n, s.x) - s.target; e += d * d; }
+  return e / Math.max(1, valData.length);
+};
 
-// --- train (mini-batch SGD), keeping the best-by-train-loss snapshot ---
+// --- train (mini-batch SGD), keeping the best-by-VAL-loss snapshot ---
 let net = createValueNet({ inputSize: enc.size, hidden: HIDDEN }, rng);
 const BATCH = 64;
-let bestLoss = Infinity;
+let bestVal = Infinity;
 let best = cloneValueNet(net);
 for (let epoch = 0; epoch < EPOCHS; epoch++) {
   let loss = 0;
@@ -67,10 +77,12 @@ for (let epoch = 0; epoch < EPOCHS; epoch++) {
     nb++;
   }
   loss /= Math.max(1, nb);
-  if (loss < bestLoss) { bestLoss = loss; best = cloneValueNet(net); }
-  if (epoch % 50 === 0 || epoch === EPOCHS - 1) console.log(`  epoch ${epoch}: train MSE=${loss.toFixed(4)}`);
+  const vm = valMse(net);
+  if (vm < bestVal) { bestVal = vm; best = cloneValueNet(net); }
+  if (epoch % 50 === 0 || epoch === EPOCHS - 1) console.log(`  epoch ${epoch}: train MSE=${loss.toFixed(4)} val MSE=${vm.toFixed(4)}`);
 }
 net = best;
+console.log(`best val MSE=${bestVal.toFixed(4)}`);
 
 // --- VERIFY: calibrate on DISJOINT val states (overall + per difficulty) ---
 function calOn(diffs: readonly number[], count: number): { mean: number; real: number; over: number; ece: number } {
