@@ -1,5 +1,11 @@
 import { Text, useInput } from 'ink';
-import type { GameAction, MapNode, NodeKind, RunState } from '../../engine/types.js';
+import type {
+  ContentRegistry,
+  GameAction,
+  MapNode,
+  NodeKind,
+  RunState,
+} from '../../engine/types.js';
 import { ACT_TRANSITION_EXHAUSTION_HP } from '../../engine/run.js';
 import { theme } from '../theme.js';
 import { Screen } from '../components/Screen.js';
@@ -7,19 +13,47 @@ import { Screen } from '../components/Screen.js';
 const KIND_LABEL: Readonly<Record<NodeKind, string>> = {
   start: 'Start',
   combat: 'Combat',
-  elite: 'ELITE combat',
-  event: 'Unknown event',
-  shop: 'Shop',
-  rest: 'Rest site',
+  elite: 'ELITE combat (harder, better loot)',
+  event: 'Unknown event (risk/reward)',
+  shop: 'Shop (spend gold)',
+  rest: 'Rest site (heal or upgrade)',
   boss: 'THE BOSS',
 };
 
+// The #60 category hint kept on every event node so stakes always read at a
+// glance — on revealed nodes it tags the named event, on hidden nodes it keeps
+// the mystery flavor.
+const EVENT_TAG = ' (risk/reward)';
+// Column budget: "[n] " prefix (4) eats into the Screen's ~76-col line budget.
+// Truncate long event names gracefully so labels never blow the budget.
+const MAX_EVENT_NAME = 76 - 4 - EVENT_TAG.length;
+
+function truncate(s: string, max: number): string {
+  return s.length <= max ? s : `${s.slice(0, Math.max(0, max - 1))}…`;
+}
+
+/**
+ * #69 Tiered reveal: event nodes are labeled PER-NODE. Look up the stored
+ * eventId; if the event is `hiddenOnMap` (the curated spicy gambles) keep it a
+ * "??? Unknown" mystery, otherwise show its NAME. Non-event nodes use the
+ * shared KIND_LABEL. Falls back to the generic event label if the id is missing.
+ */
+function nodeLabel(node: MapNode, content: ContentRegistry): string {
+  if (node.kind !== 'event') return KIND_LABEL[node.kind];
+  const def = node.eventId ? content.events[node.eventId] : undefined;
+  if (!def) return KIND_LABEL.event;
+  const name = def.hiddenOnMap ? '??? Unknown event' : def.name;
+  return `${truncate(name, MAX_EVENT_NAME)}${EVENT_TAG}`;
+}
+
 export function MapScreen({
   state,
+  content,
   dispatch,
   onViewDeck,
 }: {
   readonly state: RunState;
+  readonly content: ContentRegistry;
   readonly dispatch: (action: GameAction) => void;
   /** Opens the read-only deck overlay (App-local UI state; no engine change). */
   readonly onViewDeck: () => void;
@@ -64,7 +98,7 @@ export function MapScreen({
         <Text key={option.id}>
           [{i + 1}]{' '}
           <Text color={theme.colors.nodeKind[option.kind]}>
-            {KIND_LABEL[option.kind]}
+            {nodeLabel(option, content)}
           </Text>
         </Text>
       ))}

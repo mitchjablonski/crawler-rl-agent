@@ -254,6 +254,10 @@ function relicConditionMet(
 }
 
 function decayStatuses(statuses: Statuses): Statuses {
+  // Only TIMED statuses decay at round end. PERMANENT powers — strength,
+  // dexterity, and #68 `overcharge` — are intentionally NOT in this set, so they
+  // persist for the whole fight (overcharge keeps converting overheat to Strength
+  // every round, mirroring how strength/dexterity already stick around).
   let next = statuses;
   for (const id of ['vulnerable', 'weak', 'regen', 'poison'] as const) {
     if (getStatus(next, id) > 0) next = addStatus(next, id, -1);

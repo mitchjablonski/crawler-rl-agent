@@ -49,6 +49,28 @@ const APOTHECARY_DECK: readonly string[] = [
   'spore-burst',
 ];
 
+// #63 Overclocker: a reckless tech-aggro GLASS CANNON ("Crashes optional."). It
+// pays its own HP for power (`loseHp` overheat) and its cards scale CONTINUOUSLY
+// with missing HP (`scaleMissingHp` gradient). 9 cards, 1 cost each (vent-heat is
+// the lone 0-cost), all class-flavored: 4 basic strikes + 2 blocks to survive +
+// the two kit starters that teach BOTH levers from turn one — Vent Heat
+// (overheat: lose HP for Energy) and Meltdown Jab (a gradient "critical" that
+// hits harder the more hurt you are). maxHp 60 (fragile, between Knight 70 and a
+// true glass cannon) — low enough to feel reckless, high enough that the
+// self-damage + sustain kit doesn't death-spiral. Starter relic is
+// overclock-chip (NOT pocket-dice): one starting relic, parity with the others.
+const OVERCLOCKER_DECK: readonly string[] = [
+  'rusty-shortsword',
+  'rusty-shortsword',
+  'rusty-shortsword',
+  'rusty-shortsword',
+  'battered-buckler',
+  'battered-buckler',
+  'vent-heat',
+  'meltdown-jab',
+  'meltdown-jab',
+];
+
 export const CHARACTERS: Readonly<Record<string, Character>> = {
   knight: {
     id: 'knight',
@@ -66,7 +88,15 @@ export const CHARACTERS: Readonly<Record<string, Character>> = {
     startingRelics: ['pocket-dice'],
     maxHp: 64,
   },
+  overclocker: {
+    id: 'overclocker',
+    name: 'Overclocker',
+    description: 'Burns HP for power; hits harder the more hurt. Crashes optional.',
+    starterDeck: OVERCLOCKER_DECK,
+    startingRelics: ['overclock-chip'],
+    maxHp: 60,
+  },
 };
 
 export const DEFAULT_CHARACTER = 'knight';
-export const CHARACTER_IDS: readonly string[] = ['knight', 'apothecary'];
+export const CHARACTER_IDS: readonly string[] = ['knight', 'apothecary', 'overclocker'];

@@ -286,6 +286,10 @@ describe('App with hook events', () => {
     };
     const { lastFrame, stdin } = await renderApp(<App deps={{ ...deps(mem), ai: fakeAi }} />);
     expect(lastFrame()).toContain('Class: Knight');
+    // #58: the title groups the menu into sections — the class reads under a
+    // "Your hero" heading, separate from the "Run setup" toggles.
+    expect(lastFrame()).toContain('Your hero');
+    expect(lastFrame()).toContain('Run setup');
     // The selected class' tagline renders so a new player sees what it does,
     // and it changes when the class is cycled.
     expect(lastFrame()).toContain(CHARACTERS.knight!.description);
@@ -297,6 +301,13 @@ describe('App with hook events', () => {
     expect(lastFrame()).toContain(CHARACTERS.apothecary!.description);
     expect(lastFrame()).not.toContain(CHARACTERS.knight!.description);
     expect(mem.store.loadMeta().settings?.character).toBe('apothecary');
+
+    // #63: a third class (Overclocker) joins the cycle.
+    stdin.write('k');
+    await tick();
+    expect(lastFrame()).toContain('Class: Overclocker');
+    expect(lastFrame()).toContain(CHARACTERS.overclocker!.description);
+    expect(mem.store.loadMeta().settings?.character).toBe('overclocker');
   });
 
   it('retires stale runs as abandoned at startup (REQ-12)', async () => {

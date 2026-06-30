@@ -24,6 +24,7 @@ import type {
 import { EngineError, eventRequirementMet } from '../src/engine/types.js';
 import { mctsAction } from '../src/search/mcts.js';
 import { scoreCard } from './lib/scoreCard.js';
+import { combatValue, predictIncomingDamage } from './lib/combatValue.js';
 
 type PolicyName = 'greedy' | 'cautious' | 'naive' | 'mcts';
 type Policy = (state: RunState, content: ContentRegistry, rand: () => number) => GameAction;
@@ -100,26 +101,72 @@ function livingTarget(state: RunState, lowest: boolean): number | undefined {
   return best === -1 ? undefined : best;
 }
 
+/**
+ * #57: poison-aware, ONE-PLY greedy combat policy. Among all AFFORDABLE hand
+ * cards (× every living target for single-target cards), pick the play with the
+ * best value-per-energy this turn; repeat until no positive-value play remains
+ * (then endTurn). Value comes from `combatValue` (state-aware: poison valued by
+ * cumulative worth, conditional payoffs valued through the REAL predicate so the
+ * bot detonates at the right time, damage capped at target HP). Targeting falls
+ * out for free: each living enemy is scored, so poison-stacking and payoff cards
+ * both gravitate to the already-poisoned / killable enemy. Deterministic: a tiny
+ * seeded `rand` jitter breaks exact ties; lower hand/target index wins otherwise.
+ *
+ * Replaces the old crude type-order (which played the first affordable card of
+ * each type, blind to poison) — the source of the phantom apothecary gap.
+ */
 function combatAction(
   state: RunState,
   content: ContentRegistry,
   prefer: 'attack' | 'block',
+  rand: () => number,
 ): GameAction {
   const combat = state.combat;
   if (!combat) throw new EngineError('no combat');
-  const order = prefer === 'block' ? ['power', 'skill', 'attack'] : ['power', 'attack', 'skill'];
-  for (const type of order) {
-    for (let i = 0; i < combat.hand.length; i++) {
-      const card = content.cards[combat.hand[i] as string];
-      if (!card || card.type !== type || card.cost > combat.energy) continue;
-      return {
-        type: 'playCard',
-        handIndex: i,
-        targetIndex: card.target === 'enemy' ? livingTarget(state, true) : undefined,
-      };
+
+  // Predicted incoming damage this turn — block is valued by what it prevents.
+  const incoming = predictIncomingDamage(combat, content);
+
+  let best:
+    | { handIndex: number; targetIndex: number | undefined; rank: number }
+    | undefined;
+  // Free plays (cost 0) carry no opportunity cost, so rank by value with a small
+  // divisor; otherwise rank by value PER ENERGY so the turn's energy is spent on
+  // the most efficient plays first.
+  const consider = (handIndex: number, targetIndex: number | undefined, value: number, cost: number) => {
+    if (value <= 0) return;
+    const perEnergy = value / (cost === 0 ? 0.5 : cost);
+    const rank = perEnergy + rand() * 1e-6; // seeded deterministic tie-break
+    if (!best || rank > best.rank) best = { handIndex, targetIndex, rank };
+  };
+
+  for (let i = 0; i < combat.hand.length; i++) {
+    const card = content.cards[combat.hand[i] as string];
+    if (!card || card.cost > combat.energy) continue;
+    if (card.target === 'enemy') {
+      // Pick the BEST target for this card: highest value, ties to the lowest-HP
+      // enemy (focus-fire — secures kills and concentrates poison). Deterministic.
+      let bestVal = -Infinity;
+      let bestJ: number | undefined;
+      let bestHp = Infinity;
+      for (let j = 0; j < combat.enemies.length; j++) {
+        const e = combat.enemies[j];
+        if (!e || e.hp <= 0) continue;
+        const v = combatValue(card, combat, j, { prefer, incoming });
+        if (v > bestVal || (v === bestVal && e.hp < bestHp)) {
+          bestVal = v;
+          bestJ = j;
+          bestHp = e.hp;
+        }
+      }
+      if (bestJ !== undefined) consider(i, bestJ, bestVal, card.cost);
+    } else {
+      consider(i, undefined, combatValue(card, combat, undefined, { prefer, incoming }), card.cost);
     }
   }
-  return { type: 'endTurn' };
+
+  if (!best) return { type: 'endTurn' };
+  return { type: 'playCard', handIndex: best.handIndex, targetIndex: best.targetIndex };
 }
 
 function navAction(state: RunState, hpFrac: number, rand: () => number): GameAction {
@@ -190,7 +237,7 @@ function act(
   rand: () => number,
   prefer: 'attack' | 'block',
 ): GameAction {
-  if (state.phase === 'combat') return combatAction(state, content, prefer);
+  if (state.phase === 'combat') return combatAction(state, content, prefer, rand);
   return nonCombat(state, content, rand);
 }
 

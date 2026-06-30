@@ -11,7 +11,7 @@ import { DEFAULT_RUN_CONFIG, content } from './content/index.js';
 import { UPGRADE_TARGET_IDS, UNLOCKABLE_CARD_IDS } from './content/cards.js';
 import { EngineError, eventRequirementMet } from './types.js';
 import { Rng, seedFromString } from './rng.js';
-import type { CombatState, EnemyInstance, RunState } from './types.js';
+import type { CombatState, EnemyInstance, MapNode, RunState } from './types.js';
 
 const run = (seed: string) => createRun(content, seed, DEFAULT_RUN_CONFIG);
 
@@ -155,6 +155,54 @@ describe('createRun', () => {
     expect(state.currentNodeId).toBe(state.map.startId);
     expect(state.deck).toHaveLength(DEFAULT_RUN_CONFIG.starterDeck.length);
     expect(state.hp).toBe(DEFAULT_RUN_CONFIG.maxHp);
+  });
+});
+
+describe('#69 tiered reveal: eventId decided at generation', () => {
+  it('assigns a real content eventId to every event node (and none elsewhere)', () => {
+    for (let i = 0; i < 50; i++) {
+      const s = createRun(content, `ev-gen-${i}`, { ...DEFAULT_RUN_CONFIG, acts: 3 });
+      for (const node of Object.values(s.map.nodes)) {
+        if (node.kind === 'event') {
+          expect(node.eventId, node.id).toBeDefined();
+          expect(content.events[node.eventId as string], node.eventId).toBeDefined();
+        } else {
+          expect(node.eventId, node.id).toBeUndefined();
+        }
+      }
+    }
+  });
+
+  it('entering an event uses the STORED eventId — no re-roll at entry', () => {
+    // Find an arc seed with an event node reachable from a parent.
+    let found: { state: RunState; parent: MapNode; ev: MapNode } | undefined;
+    for (let i = 0; i < 200 && !found; i++) {
+      const s = createRun(content, `ev-enter-${i}`, { ...DEFAULT_RUN_CONFIG, acts: 3 });
+      for (const ev of Object.values(s.map.nodes)) {
+        if (ev.kind !== 'event') continue;
+        const parent = Object.values(s.map.nodes).find((p) => p.next.includes(ev.id));
+        if (parent) {
+          found = { state: s, parent, ev };
+          break;
+        }
+      }
+    }
+    expect(found, 'an arc seed has a reachable event node').toBeDefined();
+    const { state, parent, ev } = found as { state: RunState; parent: MapNode; ev: MapNode };
+    // Override the stored eventId to a sentinel; entry must read exactly it.
+    const sentinel = 'shrine-of-the-crawl';
+    const nodes = { ...state.map.nodes, [ev.id]: { ...ev, eventId: sentinel } };
+    const parked: RunState = {
+      ...state,
+      map: { ...state.map, nodes },
+      phase: 'map',
+      currentNodeId: parent.id,
+    };
+    const entered = applyAction(content, parked, { type: 'chooseNode', nodeId: ev.id });
+    expect(entered.phase).toBe('event');
+    expect(entered.event?.eventId).toBe(sentinel);
+    // No rng consumed at entry (the roll already happened at generation).
+    expect(entered.rng).toEqual(parked.rng);
   });
 });
 
@@ -321,7 +369,7 @@ describe('applyAction', () => {
       ...run('alpha'),
       phase: 'shop',
       gold: 100,
-      shop: { stock: [{ cardId: 'shield-wall', price: 50, sold: false }], potionStock: [] },
+      shop: { stock: [{ cardId: 'shield-wall', price: 50, sold: false }], potionStock: [], removeUsed: false },
     };
     const bought = applyAction(content, state, { type: 'buyCard', index: 0 });
     expect(bought.gold).toBe(50);
@@ -365,6 +413,7 @@ describe('applyAction', () => {
       shop: {
         stock: [],
         potionStock: [{ potionId: 'fire-flask', price: 35, sold: false }],
+        removeUsed: false,
       },
     };
     const bought = applyAction(content, state, { type: 'buyPotion', index: 0 });
@@ -383,6 +432,55 @@ describe('applyAction', () => {
     expect(() => applyAction(content, full, { type: 'buyPotion', index: 0 })).toThrow(
       EngineError,
     );
+  });
+
+  it('removeCard removes the chosen card, charges gold, and marks removal used (#49)', () => {
+    const state: RunState = {
+      ...run('alpha'),
+      phase: 'shop',
+      gold: 100,
+      deck: ['rusty-shortsword', 'shield-wall', 'a', 'b', 'c', 'd'],
+      shop: { stock: [], potionStock: [], removeUsed: false },
+    };
+    const removed = applyAction(content, state, { type: 'removeCard', deckIndex: 1 });
+    expect(removed.deck).toEqual(['rusty-shortsword', 'a', 'b', 'c', 'd']); // index 1 gone
+    expect(removed.gold).toBe(50); // 100 - SHOP_REMOVAL_COST (50)
+    expect(removed.shop?.removeUsed).toBe(true);
+    // A second removal in the same shop visit is rejected.
+    expect(() => applyAction(content, removed, { type: 'removeCard', deckIndex: 0 })).toThrow(
+      EngineError,
+    );
+  });
+
+  it('removeCard rejects when poor, deck at floor, bad index, or not at a shop (#49)', () => {
+    const okShop = { stock: [], potionStock: [], removeUsed: false };
+    const sixCards = ['a', 'b', 'c', 'd', 'e', 'f'];
+    // Insufficient gold.
+    expect(() =>
+      applyAction(content, { ...run('alpha'), phase: 'shop', gold: 10, deck: sixCards, shop: okShop }, {
+        type: 'removeCard',
+        deckIndex: 0,
+      }),
+    ).toThrow(EngineError);
+    // Deck at the floor (5 cards) — removal would drop below the floor.
+    expect(() =>
+      applyAction(
+        content,
+        { ...run('alpha'), phase: 'shop', gold: 100, deck: ['a', 'b', 'c', 'd', 'e'], shop: okShop },
+        { type: 'removeCard', deckIndex: 0 },
+      ),
+    ).toThrow(EngineError);
+    // Out-of-range deck index.
+    expect(() =>
+      applyAction(content, { ...run('alpha'), phase: 'shop', gold: 100, deck: sixCards, shop: okShop }, {
+        type: 'removeCard',
+        deckIndex: 9,
+      }),
+    ).toThrow(EngineError);
+    // Not at a shop (wrong phase).
+    expect(() =>
+      applyAction(content, { ...run('alpha'), gold: 100 }, { type: 'removeCard', deckIndex: 0 }),
+    ).toThrow(EngineError);
   });
 
   it('reward potion grant respects the slot limit', () => {
@@ -898,5 +996,100 @@ describe('run stats (#25)', () => {
     expect(s.phase).toBe('combat');
     expect(s.combat?.dealt).toBe(6);
     expect(s.stats).toEqual({ turns: 0, damageDealt: 0, damageTaken: 0, enemiesSlain: 0 });
+  });
+});
+
+describe('onCombatEnd relics (D9 post-victory sustain)', () => {
+  // A controlled winnable combat on a plain COMBAT node (no elite relic roll, so
+  // owner/non-owner loot rolls stay byte-identical). One strike (6 dmg) kills the
+  // 1-HP enemy on turn 1; onCombatEnd fires in finishCombat against RUN hp.
+  const enemy = (hp: number): EnemyInstance => ({
+    defId: 'cave-rat',
+    name: 'Cave Rat',
+    hp,
+    maxHp: hp,
+    block: 0,
+    statuses: {},
+    nextMoveIndex: 0, // Bite (5 damage) on the next enemy turn
+  });
+
+  const winnableRun = (opts: {
+    relics?: readonly string[];
+    playerHp?: number;
+    maxHp?: number;
+    enemyHp?: number;
+  }): RunState => {
+    const base = run('oncombatend-seed');
+    const playerHp = opts.playerHp ?? 30;
+    const maxHp = opts.maxHp ?? 50;
+    const combatNodeId = Object.keys(base.map.nodes).find(
+      (id) => base.map.nodes[id]?.kind === 'combat',
+    ) as string;
+    const combat: CombatState = {
+      enemies: [enemy(opts.enemyHp ?? 1)],
+      hand: ['rusty-shortsword', 'rusty-shortsword'],
+      drawPile: ['rusty-shortsword', 'rusty-shortsword'],
+      discardPile: [],
+      energy: 3,
+      maxEnergy: 3,
+      playerHp,
+      playerMaxHp: maxHp,
+      playerBlock: 0,
+      playerStatuses: {},
+      turn: 1,
+      dealt: 0,
+      taken: 0,
+      slain: 0,
+    };
+    return {
+      ...base,
+      currentNodeId: combatNodeId,
+      phase: 'combat',
+      hp: playerHp,
+      maxHp,
+      relics: [...(opts.relics ?? [])],
+      combat,
+    };
+  };
+
+  const strike = (s: RunState) =>
+    applyAction(content, s, { type: 'playCard', handIndex: 0, targetIndex: 0 });
+
+  it('heals RUN hp on victory for an owner', () => {
+    const won = strike(winnableRun({ relics: ['field-dressing'], playerHp: 30 }));
+    expect(won.phase).toBe('reward'); // non-boss win
+    expect(won.combat).toBeNull();
+    expect(won.hp).toBe(34); // 30 + 4
+  });
+
+  it('caps the post-victory heal at maxHp', () => {
+    const won = strike(winnableRun({ relics: ['field-dressing'], playerHp: 49, maxHp: 50 }));
+    expect(won.hp).toBe(50); // 49 + 4 → capped, not 53
+  });
+
+  it('is a strict no-op for a player owning no onCombatEnd relic', () => {
+    const won = strike(winnableRun({ relics: [], playerHp: 30 }));
+    expect(won.phase).toBe('reward');
+    expect(won.hp).toBe(30); // unchanged
+  });
+
+  it('owning an onCombatEnd relic is rng-free: combat is byte-identical to a non-owner (only hp/relics differ)', () => {
+    const owner = strike(winnableRun({ relics: ['field-dressing'], playerHp: 30 }));
+    const nonOwner = strike(winnableRun({ relics: [], playerHp: 30 }));
+    // The combat rng stream is untouched by the heal → identical.
+    expect(owner.rng).toEqual(nonOwner.rng);
+    // Everything except the healed hp (and the relic list) is identical.
+    expect({ ...owner, hp: nonOwner.hp, relics: nonOwner.relics }).toEqual(nonOwner);
+    expect(owner.hp).toBe(34);
+    expect(nonOwner.hp).toBe(30);
+  });
+
+  it('does NOT fire on defeat (no heal on a loss)', () => {
+    // Player at 5 HP vs a 100-HP enemy: strike (survives), endTurn → Bite 5 → dead.
+    let s = winnableRun({ relics: ['field-dressing'], playerHp: 5, enemyHp: 100 });
+    s = strike(s);
+    s = applyAction(content, s, { type: 'endTurn' });
+    expect(s.phase).toBe('defeat');
+    expect(s.hp).toBe(0); // killed, onCombatEnd never runs
   });
 });

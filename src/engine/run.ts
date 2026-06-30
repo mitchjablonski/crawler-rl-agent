@@ -70,9 +70,22 @@ export function createRun(
   config: RunConfig,
 ): RunState {
   const streams = initStreams(seed);
-  const [map, rng] = withStream(streams, 'map', (r) =>
-    generateMap(r, { tempoHint: config.tempoHint, acts: config.acts ?? 1 }),
-  );
+  // #69 Tiered reveal: the specific event for each event node is rolled HERE, at
+  // generation, on the same seeded 'map' stream (right after the topology), and
+  // stored on the node — so the map can NAME events and entry never re-rolls.
+  // (This shifts the rng stream vs. the old entry-roll; expected + approved.)
+  const eventIds = Object.keys(content.events).sort();
+  const [map, rng] = withStream(streams, 'map', (r) => {
+    const generated = generateMap(r, { tempoHint: config.tempoHint, acts: config.acts ?? 1 });
+    if (eventIds.length === 0) return generated;
+    const nodes: Record<string, MapNode> = { ...generated.nodes };
+    // Stable, deterministic iteration (sorted ids) so the assignment replays.
+    for (const id of Object.keys(nodes).sort()) {
+      const node = nodes[id] as MapNode;
+      if (node.kind === 'event') nodes[id] = { ...node, eventId: r.pick(eventIds) };
+    }
+    return { ...generated, nodes };
+  });
   return {
     seed,
     rng,
@@ -168,6 +181,21 @@ export function applyAction(
             i === action.index ? { ...s, sold: true } : s,
           ),
         },
+      };
+    }
+    case 'removeCard': {
+      requirePhase(state, 'shop');
+      if (!state.shop) throw new EngineError('no shop in progress');
+      if (state.shop.removeUsed) throw new EngineError('removal already used this shop');
+      if (state.gold < SHOP_REMOVAL_COST) throw new EngineError('not enough gold');
+      if (state.deck.length <= MIN_DECK_SIZE) throw new EngineError('deck at minimum size');
+      const cardId = state.deck[action.deckIndex];
+      if (cardId === undefined) throw new EngineError(`no deck card at ${action.deckIndex}`);
+      return {
+        ...state,
+        gold: state.gold - SHOP_REMOVAL_COST,
+        deck: state.deck.filter((_, i) => i !== action.deckIndex),
+        shop: { ...state.shop, removeUsed: true },
       };
     }
     case 'leaveShop':
@@ -417,7 +445,39 @@ function foldCombatStats(stats: RunState['stats'], combat: NonNullable<RunState[
   };
 }
 
+/**
+ * Apply onCombatEnd relics to the RUN after a combat VICTORY. Unlike the combat
+ * triggers (which `applyRelics` runs against CombatState on the combat rng
+ * stream), the fight is OVER here: effects land on RUN hp (`state.hp`, capped at
+ * `state.maxHp`), not on combat state. RNG-FREE by construction — onCombatEnd
+ * relics are heal-only, so nothing draws from any rng stream and the combat
+ * simulation stays byte-identical whether or not the player owns one. Returns
+ * the SAME state reference when nothing heals, so it is a strict no-op for any
+ * player who owns no onCombatEnd relic.
+ */
+function applyRelicsToRun(content: ContentRegistry, state: RunState): RunState {
+  let hp = state.hp;
+  for (const relicId of state.relics) {
+    const relic = content.relics[relicId];
+    if (!relic || relic.trigger !== 'onCombatEnd') continue;
+    for (const effect of relic.effects) {
+      // onCombatEnd has no combat context, so only heal is meaningful. Other
+      // kinds (damage/block/applyStatus/draw/gainEnergy) are guarded out.
+      if (effect.kind !== 'heal') {
+        throw new EngineError(
+          `onCombatEnd relic '${relicId}' has unsupported effect '${effect.kind}' (heal-only)`,
+        );
+      }
+      hp = Math.min(state.maxHp, hp + effect.amount);
+    }
+  }
+  return hp === state.hp ? state : { ...state, hp };
+}
+
 function finishCombat(content: ContentRegistry, state: RunState): RunState {
+  // Post-victory sustain: fire onCombatEnd relics against the RUN (heal-only,
+  // rng-free) BEFORE rewards/phase transition. Only reached on combat WIN.
+  state = applyRelicsToRun(content, state);
   const node = state.map.nodes[state.currentNodeId] as MapNode;
   if (node.kind === 'boss') {
     return { ...state, combat: null, phase: 'victory' };
@@ -564,6 +624,22 @@ const POTION_PRICES: Readonly<Record<Rarity, number>> = {
 
 const SHOP_POTION_COUNT = 2;
 
+/**
+ * Gold cost of the shop's one-per-visit card-removal service (#49). Priced like a
+ * common card (50g) so deck-thinning is a real economic tradeoff: a removal
+ * competes directly with buying a card or a couple of potions, not a no-brainer.
+ * Deterministic flat cost (no rng) → seeded replay of non-removing runs unchanged.
+ */
+export const SHOP_REMOVAL_COST = 50;
+
+/**
+ * The deck floor: removal may not shrink the deck to OR below this size. The
+ * starter deck is 9 cards; keeping >= 5 leaves a functional minimum hand engine
+ * (draw 5) and stops degenerate over-thinning. Removal is rejected when the deck
+ * is already at/under the floor.
+ */
+export const MIN_DECK_SIZE = 5;
+
 function enterShop(content: ContentRegistry, state: RunState): RunState {
   const act = state.map.nodes[state.currentNodeId]?.act ?? 0;
   const [shop, rng] = withStream(state.rng, 'loot', (r) => {
@@ -589,14 +665,21 @@ function enterShop(content: ContentRegistry, state: RunState): RunState {
     });
     return { stock, potionStock };
   });
-  return { ...state, rng, shop, phase: 'shop' };
+  // removeUsed starts false: the deck-thinning service is available once per
+  // shop visit and is reset to false here every time a shop node is entered.
+  return { ...state, rng, shop: { ...shop, removeUsed: false }, phase: 'shop' };
 }
 
 function enterEvent(content: ContentRegistry, state: RunState): RunState {
-  const ids = Object.keys(content.events).sort();
-  if (ids.length === 0) throw new EngineError('no narrative events in content');
-  const [eventId, rng] = withStream(state.rng, 'events', (r) => r.pick(ids));
-  return { ...state, rng, event: { eventId }, phase: 'event' };
+  // #69 Tiered reveal: the eventId was decided at map generation and stored on
+  // the node. Entry just reads it — NO re-roll (so the named map and the played
+  // event always agree, and the rng stream is untouched here).
+  const node = state.map.nodes[state.currentNodeId];
+  const eventId = node?.eventId;
+  if (!eventId || !content.events[eventId]) {
+    throw new EngineError(`event node ${state.currentNodeId} has no valid stored eventId`);
+  }
+  return { ...state, event: { eventId }, phase: 'event' };
 }
 
 function chooseEventOption(

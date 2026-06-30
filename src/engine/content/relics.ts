@@ -49,6 +49,12 @@ const defs: readonly RelicDef[] = [
   // moments of real danger, so it never compounds an already-winning fight.
   { id: 'cornered-instinct', name: 'Cornered Instinct', description: 'At the start of each turn, if below 50% HP, gain 6 Block.', trigger: 'turnStart', condition: { kind: 'hpBelow', pct: 50 }, effects: [{ kind: 'block', amount: 6 }] },
   { id: 'last-ember', name: 'Last Ember', description: 'At the start of each turn, if below 40% HP, gain 1 Strength.', trigger: 'turnStart', condition: { kind: 'hpBelow', pct: 40 }, effects: [{ kind: 'applyStatus', status: 'strength', stacks: 1, target: 'self' }] },
+  // --- D9: onCombatEnd post-fight sustain. Heal-only (rng-free), applied to RUN
+  // hp on VICTORY — distinct from troll-tooth's pre-combat heal. Modest numbers
+  // (peers: troll-tooth heals 3 at combat START) so it aids arc/multi-act
+  // survival without being auto-pick-dominant. `field-dressing` is CORE (always
+  // in the elite pool); the stronger variant is unlock-gated below.
+  { id: 'field-dressing', name: 'Field Dressing', description: 'After each victory, heal 4 HP.', trigger: 'onCombatEnd', effects: [{ kind: 'heal', amount: 4 }] },
   // --- E2: UNLOCKABLE extra relics. Each carries an `unlock` milestone id and is
   // EXCLUDED from the elite-relic pool until that milestone is earned
   // (UNLOCKABLE_RELIC_IDS is filtered out by default). Core relics above stay
@@ -56,6 +62,23 @@ const defs: readonly RelicDef[] = [
   { id: 'hard-won-medallion', name: 'Hard-Won Medallion', description: 'At the start of each combat, gain 1 Strength and 6 Block.', trigger: 'combatStart', effects: [{ kind: 'applyStatus', status: 'strength', stacks: 1, target: 'self' }, { kind: 'block', amount: 6 }], unlock: 'hard-victory' },
   { id: 'trophy-rack', name: 'Trophy Rack', description: 'Whenever a card you play kills an enemy, heal 2 HP and gain 1 Block.', trigger: 'onKill', effects: [{ kind: 'heal', amount: 2 }, { kind: 'block', amount: 1 }], unlock: 'three-victories' },
   { id: 'veterans-banner', name: "Veteran's Banner", description: 'At the start of each combat, gain 1 Strength, 1 Dexterity and 5 Block.', trigger: 'combatStart', effects: [{ kind: 'applyStatus', status: 'strength', stacks: 1, target: 'self' }, { kind: 'applyStatus', status: 'dexterity', stacks: 1, target: 'self' }, { kind: 'block', amount: 5 }], unlock: 'three-victories' },
+  // D9 unlock-gated variant: a beefier post-victory heal, peer to second-stomach
+  // (heals 6 at combat start). Excluded from the default pool until earned.
+  { id: 'surgeons-satchel', name: "Surgeon's Satchel", description: 'After each victory, heal 6 HP.', trigger: 'onCombatEnd', effects: [{ kind: 'heal', amount: 6 }], unlock: 'three-victories' },
+  // --- #63 Overclocker relics. ---
+  // overclock-chip (STARTER, Overclocker only): a conservative turn-one overheat —
+  // pay 2 HP for +1 Energy at combat start (the +1 lands on `energy`, not
+  // maxEnergy, so it is a turn-1 tempo burst, NOT permanent — peer to lucky-coin's
+  // +1 Energy / pocket-dice's draw 1). It also nudges the player a hair down the
+  // missing-HP gradient from the first turn, on-theme.
+  { id: 'overclock-chip', name: 'Overclock Chip', description: 'At the start of each combat, lose 2 HP and gain 1 Energy.', trigger: 'combatStart', effects: [{ kind: 'loseHp', amount: 2 }, { kind: 'gainEnergy', amount: 1 }] },
+  // redline (DRAFTABLE, core elite pool): a comeback engine — while bloodied
+  // (< 50% HP, the Overclocker's natural state) gain 1 Strength each turn. Gated
+  // to real danger like cornered-instinct/last-ember, so it never compounds an
+  // already-winning fight; left CORE (no unlock) so it is actually reachable from
+  // the elite relic pool. Relics aren't drafted by choice, so this only shifts
+  // which relic a seeded elite rewards (expected when adding any relic).
+  { id: 'redline', name: 'Redline', description: 'At the start of each turn, if below 50% HP, gain 1 Strength.', trigger: 'turnStart', condition: { kind: 'hpBelow', pct: 50 }, effects: [{ kind: 'applyStatus', status: 'strength', stacks: 1, target: 'self' }] },
 ];
 
 export const relics: Readonly<Record<string, RelicDef>> = Object.fromEntries(

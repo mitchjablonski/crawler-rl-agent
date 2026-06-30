@@ -33,6 +33,53 @@ describe('DeckView', () => {
     expect(frame).toContain(content.cards['battered-buckler']!.description);
   });
 
+  it('marks upgradeable cards with ^ and does NOT mark already-upgraded ones', () => {
+    // rusty-shortsword HAS an upgradeTo (upgradeable -> marked); its -plus leaf
+    // has no upgradeTo (already upgraded -> not marked).
+    const upgradedId = content.cards['rusty-shortsword']!.upgradeTo!;
+    const { lastFrame } = render(
+      <DeckView
+        state={withDeck(['rusty-shortsword', upgradedId])}
+        content={content}
+        onClose={noop}
+      />,
+    );
+    const frame = lastFrame() ?? '';
+    const lines = frame.split('\n');
+    const baseLine = lines.find((l) => l.includes('Rusty Shortsword') && !l.includes('[+]')) ?? '';
+    const upgradedLine = lines.find((l) => l.includes('[+]')) ?? '';
+    // Upgradeable base card carries the accent ^ marker after its name.
+    expect(baseLine).toContain('^');
+    // The already-upgraded (-plus) leaf shows [+] but NOT the ^ marker.
+    expect(upgradedLine).toContain('[+]');
+    expect(upgradedLine).not.toContain('^');
+  });
+
+  it('marker count matches the rest-site upgradeable rule', () => {
+    // A mixed deck: two upgradeable bases + one upgraded leaf + duplicates.
+    const deck = [
+      'rusty-shortsword',
+      'rusty-shortsword', // duplicate collapses to one row
+      'battered-buckler',
+      content.cards['rusty-shortsword']!.upgradeTo!, // upgraded leaf, not markable
+    ];
+    // Rest-site rule (RestScreen.upgradeable): card.upgradeTo set AND it resolves.
+    const expectedMarked = new Set(
+      deck.filter((id) => {
+        const c = content.cards[id];
+        return c?.upgradeTo !== undefined && content.cards[c.upgradeTo] !== undefined;
+      }),
+    ).size; // distinct ids that are markable -> distinct rows that get a ^
+    const { lastFrame } = render(
+      <DeckView state={withDeck(deck)} content={content} onClose={noop} />,
+    );
+    const frame = lastFrame() ?? '';
+    // Count rows (lines) that carry the ^ marker; one per distinct markable id.
+    const marked = frame.split('\n').filter((l) => l.includes(' ^')).length;
+    expect(marked).toBe(expectedMarked);
+    expect(marked).toBe(2); // rusty-shortsword + battered-buckler
+  });
+
   it('closes with esc and with v', async () => {
     let closed = 0;
     const { stdin } = render(
@@ -91,5 +138,62 @@ describe('DeckView', () => {
     stdin.write('p');
     await tick();
     expect(lastFrame()).toContain('page 1/2');
+  });
+});
+
+/** A combat RunState with the given hand/draw/discard piles (#56). */
+function inCombat(
+  hand: readonly string[],
+  drawPile: readonly string[],
+  discardPile: readonly string[],
+): RunState {
+  const base = createRun(content, 'combat-deck-test', DEFAULT_RUN_CONFIG);
+  return {
+    ...base,
+    phase: 'combat',
+    combat: {
+      enemies: [],
+      hand: [...hand],
+      drawPile: [...drawPile],
+      discardPile: [...discardPile],
+      energy: 3,
+      maxEnergy: 3,
+      playerHp: base.hp,
+      playerMaxHp: base.maxHp,
+      playerBlock: 0,
+      playerStatuses: {},
+      turn: 1,
+      dealt: 0,
+      taken: 0,
+      slain: 0,
+    },
+  };
+}
+
+describe('DeckView in combat (#56)', () => {
+  it('shows the pile summary and tags each card by its pile (hand/draw/disc)', () => {
+    const { lastFrame } = render(
+      <DeckView
+        state={inCombat(
+          ['rusty-shortsword', 'battered-buckler'], // hand
+          ['rusty-shortsword', 'rusty-shortsword'], // draw
+          ['battered-buckler'], // discard
+        )}
+        content={content}
+        onClose={noop}
+      />,
+    );
+    const frame = lastFrame() ?? '';
+    // Title carries the live pile split (draw 2 | hand 2 | discard 1).
+    expect(frame).toContain('draw 2');
+    expect(frame).toContain('hand 2');
+    expect(frame).toContain('discard 1');
+    // Rows are tagged by pile so the player sees WHERE each card sits. The
+    // discard tag is spelled out in full (#60), no longer the `disc` abbrev.
+    expect(frame).toContain('hand');
+    expect(frame).toContain('draw');
+    expect(frame).toContain('discard');
+    // The map-mode whole-deck title is NOT used in combat.
+    expect(frame).not.toContain('cards)');
   });
 });

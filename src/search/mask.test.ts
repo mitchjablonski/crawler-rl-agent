@@ -59,4 +59,19 @@ describe('actionMask', () => {
       }
     }
   });
+
+  it('maps the shop removeCard (deck-thinning) service to distinct in-range slots', () => {
+    // removeCard is enumerated per deck slot at shop nodes; the policy head must see it.
+    const dummy = { phase: 'shop' } as never;
+    const s0 = slotOf(dummy, { type: 'removeCard', deckIndex: 0 });
+    const s1 = slotOf(dummy, { type: 'removeCard', deckIndex: 1 });
+    expect(s0).not.toBeNull();
+    expect(s1).not.toBeNull();
+    expect(s0).not.toBe(s1);
+    expect(s0 as number).toBeLessThan(ACTION_SPACE);
+    // distinct from upgradeCard's block (no slot collision between the two deckIndex services)
+    expect(slotOf(dummy, { type: 'removeCard', deckIndex: 0 })).not.toBe(
+      slotOf(dummy, { type: 'upgradeCard', deckIndex: 0 }),
+    );
+  });
 });

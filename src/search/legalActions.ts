@@ -1,5 +1,6 @@
 import type { ContentRegistry, GameAction, RunState } from '../engine/types.js';
 import { eventRequirementMet } from '../engine/types.js';
+import { MIN_DECK_SIZE, SHOP_REMOVAL_COST } from '../engine/run.js';
 
 /** Every action applyAction will accept from this state. Mirrors run.ts guards. */
 export function legalActions(content: ContentRegistry, state: RunState): GameAction[] {
@@ -57,6 +58,17 @@ export function legalActions(content: ContentRegistry, state: RunState): GameAct
         if (slotFree && !item.sold && state.gold >= item.price)
           actions.push({ type: 'buyPotion', index });
       });
+      // The one-per-visit card-removal service: enumerable per deck slot when
+      // affordable, unused this visit, and above the deck floor (mirrors the
+      // run.ts removeCard guards). Greedy won't pick it, but search may.
+      if (
+        state.shop &&
+        !state.shop.removeUsed &&
+        state.gold >= SHOP_REMOVAL_COST &&
+        state.deck.length > MIN_DECK_SIZE
+      ) {
+        state.deck.forEach((_, deckIndex) => actions.push({ type: 'removeCard', deckIndex }));
+      }
       return actions;
     }
     case 'rest': {

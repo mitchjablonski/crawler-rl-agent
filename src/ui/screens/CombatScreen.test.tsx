@@ -156,4 +156,92 @@ describe('CombatScreen juice beats (V6)', () => {
     rerender(<CombatScreen state={withEnemyHp(start, 0)} content={content} dispatch={noop} />);
     expect(lastFrame() ?? '').toContain('DOWN');
   });
+
+  it('surfaces an unplayable-card count in the footer when a card is unaffordable (#60)', () => {
+    const start = combatWith('skeleton-intern', 0);
+    const combat = start.combat as CombatState;
+    // One affordable (cost<=energy) + two unaffordable cards at low energy.
+    const cheap = Object.values(content.cards).find((c) => c.cost === 1)!;
+    const dear = Object.values(content.cards).find((c) => c.cost >= 2)!;
+    const state: RunState = {
+      ...start,
+      combat: { ...combat, hand: [cheap.id, dear.id, dear.id], energy: 1 },
+    };
+    const { lastFrame } = render(
+      <CombatScreen state={state} content={content} dispatch={noop} />,
+    );
+    // Derived live from hand vs energy: two cards cost more than 1 energy.
+    expect(lastFrame() ?? '').toContain('2 unplayable');
+  });
+
+  it('shows NO unplayable hint when every card is affordable (#60)', () => {
+    const start = combatWith('skeleton-intern', 0);
+    const combat = start.combat as CombatState;
+    const cheap = Object.values(content.cards).find((c) => c.cost <= 1)!;
+    const state: RunState = {
+      ...start,
+      combat: { ...combat, hand: [cheap.id], energy: 3 },
+    };
+    const { lastFrame } = render(
+      <CombatScreen state={state} content={content} dispatch={noop} />,
+    );
+    expect(lastFrame() ?? '').not.toContain('unplayable');
+  });
+
+  it('shows the LIVE gradient value of a missing-HP card, rising as HP drops (#65)', () => {
+    // meltdown-jab: deal 5, +1 per 10 HP missing. At 30/60 missing = 30 → +3 → 8.
+    const start = combatWith('skeleton-intern', 0);
+    const combat = start.combat as CombatState;
+    const state: RunState = {
+      ...start,
+      combat: { ...combat, hand: ['meltdown-jab'], playerHp: 30, playerMaxHp: 60 },
+    };
+    const { lastFrame } = render(
+      <CombatScreen state={state} content={content} dispatch={noop} />,
+    );
+    // The effective number is surfaced (the "aha": hurt → bigger number).
+    expect(lastFrame() ?? '').toContain('now 8 dmg');
+  });
+
+  it('shows only the base gradient value at full HP and NO live line for plain cards (#65)', () => {
+    const start = combatWith('skeleton-intern', 0);
+    const combat = start.combat as CombatState;
+    // Full HP → bonus 0 → effective = base 5; a plain attack gets no live line.
+    const state: RunState = {
+      ...start,
+      combat: { ...combat, hand: ['meltdown-jab', 'rusty-shortsword'], playerHp: 60, playerMaxHp: 60 },
+    };
+    const { lastFrame } = render(
+      <CombatScreen state={state} content={content} dispatch={noop} />,
+    );
+    const frame = lastFrame() ?? '';
+    expect(frame).toContain('now 5 dmg'); // gradient card, base at full HP
+    expect((frame.match(/now \d+ /g) ?? []).length).toBe(1); // only the gradient card
+  });
+
+  it('opens the deck overlay on [v] without dispatching a combat action (#56)', async () => {
+    const tick = () => new Promise((resolve) => setTimeout(resolve, 25));
+    const start = combatWith('skeleton-intern', 0);
+    let opened = false;
+    let dispatched = false;
+    const { lastFrame, stdin } = render(
+      <CombatScreen
+        state={start}
+        content={content}
+        dispatch={() => {
+          dispatched = true;
+        }}
+        onViewDeck={() => {
+          opened = true;
+        }}
+      />,
+    );
+    // The affordance is advertised in the footer.
+    expect(lastFrame() ?? '').toContain('[v] view deck');
+    await tick();
+    stdin.write('v');
+    await tick();
+    expect(opened).toBe(true); // overlay requested
+    expect(dispatched).toBe(false); // read-only: no combat action fired
+  });
 });

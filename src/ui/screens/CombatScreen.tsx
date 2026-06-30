@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Box, Text, useInput } from 'ink';
 import type {
+  CardDef,
   CombatState,
   ContentRegistry,
   EnemyInstance,
@@ -124,16 +125,43 @@ function intentKindFor(content: ContentRegistry, enemy: EnemyInstance): IntentKi
   return 'unknown';
 }
 
+/**
+ * #65 Overclocker legibility: the LIVE effective value of a missing-HP gradient
+ * card, computed from the CURRENT combat HP so the player SEES the payoff number
+ * rise as they take damage — the static card description only carries the base
+ * plus the "+1 per N missing" template and forces mental math. Returns null for
+ * cards without a `scaleMissingHp` damage/block effect (so non-gradient cards are
+ * untouched). Mirrors the engine's `floor((maxHp - hp) / divisor)` EXACTLY
+ * (display only — no effect/amount change). Combat-only: the map/deck view has no
+ * live HP context and keeps showing the static text.
+ */
+function liveGradient(card: CardDef, combat: CombatState): string | null {
+  for (const e of card.effects) {
+    if ((e.kind === 'damage' || e.kind === 'block') && e.scaleMissingHp !== undefined) {
+      const bonus = Math.floor((combat.playerMaxHp - combat.playerHp) / e.scaleMissingHp);
+      const effective = e.amount + bonus;
+      return `now ${effective} ${e.kind === 'damage' ? 'dmg' : 'blk'}`;
+    }
+  }
+  return null;
+}
+
 export function CombatScreen({
   state,
   content,
   dispatch,
   nameFor,
+  onViewDeck,
 }: {
   readonly state: RunState;
   readonly content: ContentRegistry;
   readonly dispatch: (action: GameAction) => void;
   readonly nameFor?: (defId: string) => string | undefined;
+  /**
+   * Opens the read-only deck overlay (#56). App-local UI state, mirroring the
+   * map's `[v] view deck`; optional so direct-render tests need not wire it.
+   */
+  readonly onViewDeck?: () => void;
 }) {
   const combat = state.combat as CombatState;
   // V6 juice: diff the combat state the player's LAST action changed to derive
@@ -151,11 +179,24 @@ export function CombatScreen({
   // Letter keys address the satchel (shared with the shop; skips 'e' = end turn).
   const potionKeys = POTION_KEYS.slice(0, state.maxPotions);
   const pending = pendingCard !== null || pendingPotion !== null;
+  // Legibility (#60): pressing an unaffordable card silently no-ops below, so
+  // DERIVE a live count of hand cards whose cost exceeds current energy and
+  // surface it in the footer. No new state — recomputed every render from the
+  // live hand/energy, so it stays correct as energy is spent or cards drawn.
+  const unplayable = combat.hand.filter(
+    (id) => (content.cards[id]?.cost ?? 0) > combat.energy,
+  ).length;
 
   useInput((input, key) => {
     if (key.escape) {
       setPendingCard(null);
       setPendingPotion(null);
+      return;
+    }
+    // #56: open the read-only deck overlay. 'v' is not a card/potion/target key,
+    // so it never conflicts; opening dispatches nothing (combat state untouched).
+    if (input === 'v' && onViewDeck) {
+      onViewDeck();
       return;
     }
     if (input === 'e') {
@@ -225,7 +266,7 @@ export function CombatScreen({
 
   const footer = pending
     ? 'number: target  esc: cancel'
-    : `number: play card  ${state.potions.length > 0 ? 'letter: use potion  ' : ''}e: end turn`;
+    : `number: play card${unplayable > 0 ? `  · ${unplayable} unplayable` : ''}  ${state.potions.length > 0 ? 'letter: use potion  ' : ''}e: end turn${onViewDeck ? '  [v] view deck' : ''}`;
 
   return (
     <Screen title="Combat" footer={footer} framed={false}>
@@ -314,6 +355,7 @@ export function CombatScreen({
                 marker={`[${i + 1}]`}
                 card={card}
                 dim={!affordable}
+                live={liveGradient(card, combat)}
               />
             );
           })}

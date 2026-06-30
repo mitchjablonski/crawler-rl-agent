@@ -156,7 +156,10 @@ export function RestScreen({
       <Text bold>A defensible alcove, warm and quiet.</Text>
       <Text dimColor>Someone has carved {'"'}5 stars, would die here again{'"'} into the wall.</Text>
       <Box marginTop={1} flexDirection="column">
-        <Text>[r] Rest (heal {HEAL_PCT}% of max HP)</Text>
+        {/* Show the COMPUTED heal as an absolute number (#60): mirrors the
+            engine's rest formula exactly (Math.floor(maxHp * 0.2)) so the label
+            never lies. Derived live from state.maxHp — no new state. */}
+        <Text>[r] Rest (heal {Math.floor((state.maxHp * HEAL_PCT) / 100)} HP)</Text>
         <Text dimColor={options.length === 0}>
           [u] Upgrade a card{options.length === 0 ? ' (none upgradeable)' : ` (${options.length} upgradeable)`}
         </Text>

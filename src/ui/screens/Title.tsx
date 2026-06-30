@@ -97,6 +97,9 @@ export function Title({
   return (
     <Screen title="CLAUDE CODE CRAWLER" footer={`announcer: ${announcerLabel(aiBackend)}`}>
       <Text dimColor>A dungeon beneath your terminal.</Text>
+      {/* #58: group the flat menu into sections so the character choice reads as
+          "who you are" rather than another config row: Start actions, then Your
+          hero (class + tagline), then Run setup (the toggles), then Quit. */}
       <Box marginTop={1} flexDirection="column">
         {hasSave && <Text>[c] Continue your delve</Text>}
         <Text>[n] New delve</Text>
@@ -104,15 +107,29 @@ export function Title({
           [t] Daily {dailyDate}
           {dailyBest !== undefined ? ` (best: ${dailyBest})` : ''}
         </Text>
-        <Text>[k] Class: {characterName}</Text>
+      </Box>
+      <Box marginTop={1} flexDirection="column">
+        <Text color={theme.colors.muted} dimColor>
+          — Your hero —
+        </Text>
+        <Text>
+          [k] Class: <Text color={theme.colors.accent}>{characterName}</Text>
+        </Text>
         <Text color={theme.colors.muted} dimColor wrap="truncate">
           {'    '}
           {characterDescription}
         </Text>
+      </Box>
+      <Box marginTop={1} flexDirection="column">
+        <Text color={theme.colors.muted} dimColor>
+          — Run setup —
+        </Text>
         <Text>[m] Mode: {RUN_MODE_LABEL[runMode]}</Text>
         <Text>[d] Difficulty: {DIFFICULTY_LABEL[difficulty]}</Text>
         <Text>[s] Snark: {SNARK_LABEL[snark]}</Text>
-        <Text>[q] Quit</Text>
+      </Box>
+      <Box marginTop={1}>
+        <Text dimColor>[q] Quit</Text>
       </Box>
       <Box marginTop={1} flexDirection="column">
         {justUnlockedNames.length > 0 && (

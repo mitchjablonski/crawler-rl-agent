@@ -25,6 +25,19 @@ describe('RestScreen rest menu', () => {
     expect(frame).toContain('[u] Upgrade a card');
     expect(frame).toContain('(1 upgradeable)');
   });
+
+  it('shows the rest heal as an absolute HP number matching the engine formula (#60)', () => {
+    const state = onRest(['rusty-shortsword']);
+    // Mirror the engine reducer exactly: Math.floor(maxHp * 0.2).
+    const expected = Math.floor(state.maxHp * 0.2);
+    const { lastFrame } = render(
+      <RestScreen state={state} content={content} dispatch={noop} />,
+    );
+    const frame = lastFrame() ?? '';
+    expect(frame).toContain(`heal ${expected} HP`);
+    // The old percent phrasing is gone.
+    expect(frame).not.toContain('% of max HP');
+  });
 });
 
 describe('RestScreen upgrade chooser shows base -> upgraded', () => {

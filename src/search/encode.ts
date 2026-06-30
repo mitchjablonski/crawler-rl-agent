@@ -18,7 +18,7 @@ import {
 /** Fixed, ordered vocabularies for the closed unions in engine/types.ts. */
 // Must match StatusId in engine/types.ts. The structural-signature guard (statuses
 // count in the manifest fingerprint) makes any drift loud instead of silent.
-const STATUS_IDS: readonly StatusId[] = ['strength', 'vulnerable', 'weak', 'regen', 'poison', 'dexterity'];
+const STATUS_IDS: readonly StatusId[] = ['strength', 'vulnerable', 'weak', 'regen', 'poison', 'dexterity', 'overcharge'];
 const NODE_KINDS: readonly NodeKind[] = ['start', 'combat', 'elite', 'event', 'shop', 'rest', 'boss'];
 const PHASES: readonly Phase[] = ['map', 'combat', 'reward', 'shop', 'rest', 'event', 'victory', 'defeat'];
 

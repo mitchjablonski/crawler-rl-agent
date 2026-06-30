@@ -121,6 +121,13 @@ describe('combat flow', () => {
     expect(after.enemies[0]?.statuses.vulnerable).toBe(1);
   });
 
+  it('#68: overcharge is permanent — it does NOT decay at round end', () => {
+    const c = { ...freshCombat(), playerStatuses: { overcharge: 2, strength: 1 } };
+    const after = endTurn(T, c, new Rng(2));
+    expect(after.playerStatuses.overcharge).toBe(2); // permanent, like strength
+    expect(after.playerStatuses.strength).toBe(1);
+  });
+
   it('dexterity increases block gained', () => {
     const c = { ...freshCombat(), playerStatuses: { dexterity: 2 } };
     const guarded = playCard(T, c, c.hand.indexOf('guard'), undefined, new Rng(2));

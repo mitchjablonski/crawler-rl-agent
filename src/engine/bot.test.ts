@@ -113,6 +113,30 @@ describe('headless full runs', () => {
     expect(finished).toBe(20);
   });
 
+  it('greedy completes runs as the Overclocker class and is winnable-shaped', () => {
+    // #63: the Overclocker kit (loseHp overheat + scaleMissingHp gradient) must
+    // resolve in a real run, never hang/throw, and be WINNABLE — not a guaranteed
+    // death-spiral. Assert every run finishes and at least one is a victory.
+    const oc = CHARACTERS['overclocker']!;
+    const cfg = {
+      ...DEFAULT_RUN_CONFIG,
+      starterDeck: oc.starterDeck,
+      startingRelics: oc.startingRelics,
+      maxHp: oc.maxHp,
+    };
+    const outcomes = { victory: 0, defeat: 0 };
+    for (let i = 0; i < 30; i++) {
+      let state = createRun(content, `overclock-${i}`, cfg);
+      for (let j = 0; j < 10_000 && !['victory', 'defeat'].includes(state.phase); j++) {
+        state = applyAction(content, state, greedy(state));
+      }
+      expect(['victory', 'defeat']).toContain(state.phase);
+      outcomes[state.phase as 'victory' | 'defeat']++;
+    }
+    expect(outcomes.victory + outcomes.defeat).toBe(30);
+    expect(outcomes.victory, 'overclocker is winnable, not a death-spiral').toBeGreaterThan(0);
+  });
+
   it('greedy completes 3-act arc runs and reaches both outcomes', () => {
     const outcomes = { victory: 0, defeat: 0 };
     for (let i = 0; i < 30; i++) {

@@ -35,7 +35,7 @@ describe('StatusBar', () => {
   it('keeps the HUD + narration intact (no player statuses)', () => {
     const base = createRun(content, 'statusbar-test', DEFAULT_RUN_CONFIG);
     const { lastFrame } = render(
-      <StatusBar state={base} linked={false} narration="found a coin purse" relics={[]} />,
+      <StatusBar state={base} linked={false} narration="found a coin purse" relics={[]} characterName="Knight" />,
     );
     const frame = lastFrame() ?? '';
     expect(frame).toContain(`HP ${base.hp}/${base.maxHp}`);
@@ -51,7 +51,7 @@ describe('StatusBar', () => {
     const longNarration =
       'a very long bit of player narration that would have crowded out the dungeon status before the fix';
     const { lastFrame } = render(
-      <StatusBar state={base} linked={false} narration={longNarration} relics={[]} />,
+      <StatusBar state={base} linked={false} narration={longNarration} relics={[]} characterName="Knight" />,
     );
     const frame = lastFrame() ?? '';
     expect(frame).toContain('dungeon: dormant (ccc init)');
@@ -66,6 +66,7 @@ describe('StatusBar', () => {
         linked
         narration={null}
         relics={['Rusty Blade', 'Lucky Coin']}
+        characterName="Knight"
       />,
     );
     const frame = lastFrame() ?? '';
@@ -82,7 +83,7 @@ describe('StatusBar', () => {
 
     const base = createRun(content, 'statusbar-test', DEFAULT_RUN_CONFIG);
     const { lastFrame } = render(
-      <StatusBar state={base} linked narration={null} relics={relics} />,
+      <StatusBar state={base} linked narration={null} relics={relics} characterName="Knight" />,
     );
     const frame = lastFrame() ?? '';
     expect(frame).toContain('relics:');
@@ -113,7 +114,7 @@ describe('StatusBar', () => {
 
     const base = createRun(content, 'statusbar-test', DEFAULT_RUN_CONFIG);
     const { lastFrame } = render(
-      <StatusBar state={base} linked narration={null} relics={relics} />,
+      <StatusBar state={base} linked narration={null} relics={relics} characterName="Knight" />,
     );
     const frame = lastFrame() ?? '';
     expect(frame).toContain(`(+${hidden} more)`);
@@ -142,7 +143,7 @@ describe('StatusBar', () => {
   it('omits the relics line entirely when the player holds none', () => {
     const base = createRun(content, 'statusbar-test', DEFAULT_RUN_CONFIG);
     const { lastFrame } = render(
-      <StatusBar state={base} linked narration={null} relics={[]} />,
+      <StatusBar state={base} linked narration={null} relics={[]} characterName="Knight" />,
     );
     expect(lastFrame() ?? '').not.toContain('relics:');
   });
@@ -156,6 +157,7 @@ describe('StatusBar', () => {
         linked
         narration={null}
         relics={[]}
+        characterName="Knight"
       />,
     );
     const frame = lastFrame() ?? '';
@@ -186,7 +188,7 @@ describe('StatusBar', () => {
     };
     const state: RunState = { ...base, phase: 'combat', combat };
     const { lastFrame } = render(
-      <StatusBar state={state} linked narration={null} relics={[]} />,
+      <StatusBar state={state} linked narration={null} relics={[]} characterName="Knight" />,
     );
     const frame = lastFrame() ?? '';
     // Counts match the live pile lengths.
@@ -200,7 +202,7 @@ describe('StatusBar', () => {
   it('omits the pile counts (and shows deck N) outside combat', () => {
     const base = createRun(content, 'statusbar-test', DEFAULT_RUN_CONFIG);
     const { lastFrame } = render(
-      <StatusBar state={base} linked narration={null} relics={[]} />,
+      <StatusBar state={base} linked narration={null} relics={[]} characterName="Knight" />,
     );
     const frame = lastFrame() ?? '';
     expect(frame).not.toContain('draw ');
@@ -221,7 +223,7 @@ describe('StatusBar', () => {
       poison: 9,
     });
     const { lastFrame } = render(
-      <StatusBar state={state} linked narration={null} relics={[]} />,
+      <StatusBar state={state} linked narration={null} relics={[]} characterName="Knight" />,
     );
     const frame = lastFrame() ?? '';
     for (const line of frame.split('\n')) {
@@ -234,7 +236,7 @@ describe('StatusBar', () => {
 
   it('shows no status brackets in combat when the player has none', () => {
     const { lastFrame } = render(
-      <StatusBar state={combatState({})} linked narration={null} relics={[]} />,
+      <StatusBar state={combatState({})} linked narration={null} relics={[]} characterName="Knight" />,
     );
     const frame = lastFrame() ?? '';
     expect(frame).not.toContain('STR');
@@ -248,21 +250,117 @@ describe('StatusBar', () => {
       combat: { ...(start.combat as CombatState), playerBlock: 5 },
     };
     const { lastFrame, rerender } = render(
-      <StatusBar state={start} linked narration={null} relics={[]} />,
+      <StatusBar state={start} linked narration={null} relics={[]} characterName="Knight" />,
     );
     expect(lastFrame() ?? '').not.toContain('+5blk'); // no prior on first render
-    rerender(<StatusBar state={raised} linked narration={null} relics={[]} />);
+    rerender(<StatusBar state={raised} linked narration={null} relics={[]} characterName="Knight" />);
     expect(lastFrame() ?? '').toContain('+5blk');
+  });
+
+  it('shows a -Nblk beat when block ABSORBED a hit on the last action (#60)', () => {
+    const start: RunState = {
+      ...combatState({}),
+      combat: { ...(combatState({}).combat as CombatState), playerBlock: 5 },
+    };
+    const spent: RunState = {
+      ...start,
+      combat: { ...(start.combat as CombatState), playerBlock: 1 },
+    };
+    const { lastFrame, rerender } = render(
+      <StatusBar state={start} linked narration={null} relics={[]} characterName="Knight" />,
+    );
+    expect(lastFrame() ?? '').not.toContain('-4blk'); // no prior on first render
+    rerender(<StatusBar state={spent} linked narration={null} relics={[]} characterName="Knight" />);
+    expect(lastFrame() ?? '').toContain('-4blk'); // 5 -> 1 absorbed
   });
 
   it('shows a +Ng gold beat when gold rose on the last action (V6 juice)', () => {
     const start = createRun(content, 'statusbar-test', DEFAULT_RUN_CONFIG);
     const richer: RunState = { ...start, gold: start.gold + 25 };
     const { lastFrame, rerender } = render(
-      <StatusBar state={start} linked={false} narration={null} relics={[]} />,
+      <StatusBar state={start} linked={false} narration={null} relics={[]} characterName="Knight" />,
     );
-    rerender(<StatusBar state={richer} linked={false} narration={null} relics={[]} />);
+    rerender(<StatusBar state={richer} linked={false} narration={null} relics={[]} characterName="Knight" />);
     expect(lastFrame() ?? '').toContain('+25g');
+  });
+
+  it('shows the combat turn counter matching combat.turn on the pile line', () => {
+    const base = createRun(content, 'statusbar-test', DEFAULT_RUN_CONFIG);
+    const combat: CombatState = {
+      enemies: [],
+      hand: ['a'],
+      drawPile: ['b', 'c'],
+      discardPile: [],
+      energy: 3,
+      maxEnergy: 3,
+      playerHp: base.hp,
+      playerMaxHp: base.maxHp,
+      playerBlock: 0,
+      playerStatuses: {},
+      turn: 4,
+      dealt: 0,
+      taken: 0,
+      slain: 0,
+    };
+    const state: RunState = { ...base, phase: 'combat', combat };
+    const { lastFrame } = render(
+      <StatusBar state={state} linked narration={null} relics={[]} characterName="Knight" />,
+    );
+    const frame = lastFrame() ?? '';
+    expect(frame).toContain(`turn ${combat.turn}`); // turn 4
+    // The turn counter lives on the existing pile line (no extra HUD row).
+    for (const line of frame.split('\n')) expect(line.length).toBeLessThanOrEqual(76);
+  });
+
+  it('omits the turn counter outside combat', () => {
+    const base = createRun(content, 'statusbar-test', DEFAULT_RUN_CONFIG);
+    const { lastFrame } = render(
+      <StatusBar state={base} linked narration={null} relics={[]} characterName="Knight" />,
+    );
+    expect(lastFrame() ?? '').not.toContain('turn ');
+  });
+
+  it('shows the class label in the HUD both out of and in combat', () => {
+    const base = createRun(content, 'statusbar-test', DEFAULT_RUN_CONFIG);
+    const out = render(
+      <StatusBar state={base} linked narration={null} relics={[]} characterName="Apothecary" />,
+    );
+    expect(out.lastFrame() ?? '').toContain('[Apothecary]');
+
+    const inCombat = render(
+      <StatusBar
+        state={combatState({})}
+        linked
+        narration={null}
+        relics={[]}
+        characterName="Apothecary"
+      />,
+    );
+    expect(inCombat.lastFrame() ?? '').toContain('[Apothecary]');
+  });
+
+  it('#65: shows the warm HEAT chip for the Overclocker only when missing HP', () => {
+    const full = combatState({});
+    const hurt: RunState = {
+      ...full,
+      combat: { ...(full.combat as CombatState), playerHp: 30, playerMaxHp: 60 },
+      maxHp: 60,
+    };
+    // Hurt Overclocker -> powered zone, chip shows.
+    const a = render(
+      <StatusBar state={hurt} linked narration={null} relics={[]} characterName="Overclocker" />,
+    );
+    expect(a.lastFrame() ?? '').toContain('HEAT');
+    // Full-HP Overclocker -> no missing HP, no chip.
+    const b = render(
+      <StatusBar state={full} linked narration={null} relics={[]} characterName="Overclocker" />,
+    );
+    expect(b.lastFrame() ?? '').not.toContain('HEAT');
+    // Another class, even hurt, never sees it (low HP there is pure danger).
+    const c = render(
+      <StatusBar state={hurt} linked narration={null} relics={[]} characterName="Knight" />,
+    );
+    expect(c.lastFrame() ?? '').not.toContain('HEAT');
   });
 
   it('shows a +Nhp beat when HP rose on the last action (V6 juice)', () => {
@@ -270,9 +368,9 @@ describe('StatusBar', () => {
     const hurt: RunState = { ...start, hp: start.hp - 10 };
     const healed: RunState = { ...start, hp: start.hp - 4 };
     const { lastFrame, rerender } = render(
-      <StatusBar state={hurt} linked={false} narration={null} relics={[]} />,
+      <StatusBar state={hurt} linked={false} narration={null} relics={[]} characterName="Knight" />,
     );
-    rerender(<StatusBar state={healed} linked={false} narration={null} relics={[]} />);
+    rerender(<StatusBar state={healed} linked={false} narration={null} relics={[]} characterName="Knight" />);
     expect(lastFrame() ?? '').toContain('+6hp');
   });
 });
