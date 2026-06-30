@@ -1,6 +1,6 @@
 import { Box, Text } from 'ink';
 import type { RunState } from '../../engine/types.js';
-import { theme, statusSegments } from '../theme.js';
+import { theme, statusSegments, hpTint } from '../theme.js';
 import { usePrevOnChange } from '../juice.js';
 
 /** The literal prefix the relics line renders before the names. */
@@ -63,11 +63,19 @@ export function StatusBar({
   linked,
   narration,
   relics,
+  characterName,
 }: {
   readonly state: RunState;
   readonly linked: boolean;
   readonly narration: string | null;
   readonly relics: readonly string[];
+  /**
+   * #52: the selected class display name (e.g. "Knight"). Surfaced as a compact
+   * dim `[Knight]` tag on row 1 so the player's class identity is visible on
+   * EVERY in-run screen (the class otherwise only showed on the Title). Inline
+   * on the existing HP row — adds no new HUD row and stays within contentWidth.
+   */
+  readonly characterName: string;
 }) {
   const combat = state.combat;
   const hp = combat ? combat.playerHp : state.hp;
@@ -88,6 +96,13 @@ export function StatusBar({
     prior && prior.combat && combat
       ? Math.max(0, combat.playerBlock - prior.combat.playerBlock)
       : 0;
+  // The symmetric beat (#60): block ABSORBING a hit. Mirrors blockGain's
+  // prior-state diff, clamped >=0, so it appears on the same action the block
+  // was spent and persists until the next action (snapshot-verifiable).
+  const blockLoss =
+    prior && prior.combat && combat
+      ? Math.max(0, prior.combat.playerBlock - combat.playerBlock)
+      : 0;
   // The player's own combat statuses, rendered with the SAME canonical glyphs
   // (icon + identity color + format) as enemy tags and intent chips. Only shown
   // in combat and only when the player actually has statuses — additive, so the
@@ -97,7 +112,11 @@ export function StatusBar({
     <Box flexDirection="column">
       <Box width={theme.layout.contentWidth} paddingX={1} justifyContent="space-between">
         <Text>
-          <Text color={theme.colors.hp} bold>
+          {/* #64: the HP readout tints by current fraction (hpTint) so a low-HP
+              state is FELT — a universal danger cue, and the Overclocker's
+              missing-HP "heat" made legible. Same row/glyphs (color only), so the
+              HUD budget is unchanged. */}
+          <Text color={hpTint(hp, state.maxHp)} bold>
             HP {hp}/{state.maxHp}
           </Text>
           {hpGain > 0 && (
@@ -121,9 +140,26 @@ export function StatusBar({
                   +{blockGain}blk
                 </Text>
               )}
+              {blockLoss > 0 && (
+                <Text color={theme.colors.block} bold>
+                  {' '}
+                  -{blockLoss}blk
+                </Text>
+              )}
               <Text color={theme.colors.energy}>
                 {'  '}EN {combat.energy}/{combat.maxEnergy}
               </Text>
+              {/* #65 "powered" co-signal: for the Overclocker, missing HP is the
+                  payoff (it fuels the gradient), not just danger. A subtle warm
+                  HEAT chip marks the powered zone so the red HP readout reads as
+                  INTENTIONAL. Gated to the class (its name is already a prop) so
+                  other classes — for whom low HP is pure danger — never see it.
+                  Inline on the existing row (no new HUD row), combat-only. */}
+              {characterName === 'Overclocker' && hp < state.maxHp && (
+                <Text color={theme.colors.heat} bold>
+                  {'  '}HEAT
+                </Text>
+              )}
             </>
           )}
           {playerStatusSegs.length > 0 && (
@@ -175,6 +211,11 @@ export function StatusBar({
             <Text>{combat.discardPile.length}</Text>
             <Text color={theme.colors.muted}>{'  '}hand </Text>
             <Text>{combat.hand.length}</Text>
+            {/* #52: combat tempo — which turn the fight is on (escalation/ramps
+                key off this). Inline on the existing pile line, combat-only, so
+                no new HUD row. */}
+            <Text color={theme.colors.muted}>{'  '}turn </Text>
+            <Text>{combat.turn}</Text>
           </Text>
         </Box>
       )}
@@ -212,8 +253,17 @@ export function StatusBar({
           {narration ?? ''}
         </Text>
       </Box>
+      {/* #52: class identity. The dungeon-link line is a single full-width Text
+          (no space-between flex), so appending a compact `[Knight]` tag here can
+          never clip the resource row, adds no new HUD row, and keeps the class
+          visible on EVERY in-run screen. */}
       <Box width={theme.layout.contentWidth} paddingX={1}>
-        <Text dimColor>{linked ? 'dungeon: linked' : 'dungeon: dormant (ccc init)'}</Text>
+        <Text dimColor wrap="truncate">
+          {linked ? 'dungeon: linked' : 'dungeon: dormant (ccc init)'}
+          {'   ['}
+          {characterName}
+          {']'}
+        </Text>
       </Box>
     </Box>
   );

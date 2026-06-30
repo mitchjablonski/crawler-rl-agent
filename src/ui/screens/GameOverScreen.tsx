@@ -6,13 +6,21 @@ import { Screen } from '../components/Screen.js';
 export function GameOverScreen({
   state,
   relicNames,
+  characterName,
   onNew,
   onTitle,
   dailyDate,
   score,
   priorBest,
+  unlockedNames = [],
 }: {
   readonly state: RunState;
+  /**
+   * #52: the class played this run (e.g. "Knight"). Shown in the run-report so
+   * the report records WHO the run was played as — the class otherwise vanished
+   * after the Title. Rendered alongside the run stats.
+   */
+  readonly characterName: string;
   /**
    * Held relics by display name (christened epithet preferred over base name),
    * computed in App to mirror the StatusBar relic pattern (#21). Empty => "none".
@@ -24,6 +32,14 @@ export function GameOverScreen({
   readonly dailyDate?: string;
   /** #28: this run's pure score (also the daily score for a daily run). */
   readonly score: number;
+  /**
+   * #46: display names of cross-run unlocks EARNED BY THIS RUN (the same diff
+   * App surfaces on the Title via `justUnlocked`). Resolved id->name in App the
+   * same way the Title does. When non-empty, GameOver celebrates them here too —
+   * the peak emotional moment — so a player starting a new run immediately
+   * doesn't miss the fanfare. Empty => no line.
+   */
+  readonly unlockedNames?: readonly string[];
   /**
    * #28: personal best for this run's (character, mode) among PRIOR runs, or
    * null when this is the first such run (which therefore reads as a NEW BEST).
@@ -79,10 +95,17 @@ export function GameOverScreen({
         {dailyDate !== undefined && (
           <Text color={theme.colors.muted}>Daily {dailyDate}</Text>
         )}
+        {unlockedNames.length > 0 && (
+          <Text bold color={theme.colors.success} wrap="truncate-end">
+            NEW UNLOCKED: {unlockedNames.join(', ')}
+          </Text>
+        )}
       </Box>
       <Box marginTop={1} flexDirection="column">
         <Text>
-          <Text color={theme.colors.muted}>Depth reached </Text>
+          <Text color={theme.colors.muted}>Class </Text>
+          <Text color={theme.colors.accent}>{characterName}</Text>
+          <Text color={theme.colors.muted}>   Depth reached </Text>
           <Text color={theme.colors.accent}>
             {depth}/{bossRow}
           </Text>

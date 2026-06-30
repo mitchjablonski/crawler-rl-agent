@@ -24,6 +24,7 @@ export function CardTile({
   card,
   dim = false,
   trailing,
+  live,
 }: {
   /** Selection marker the caller presses, e.g. `[1]` for cards. */
   readonly marker: string;
@@ -32,6 +33,13 @@ export function CardTile({
   readonly dim?: boolean;
   /** Optional trailing annotation rendered under the description (e.g. price). */
   readonly trailing?: ReactNode;
+  /**
+   * #65 live "now N" annotation for a missing-HP gradient card, computed by the
+   * caller from the current combat HP (combat-only — the static description still
+   * carries the base + template everywhere else). Rendered in the warm "heat"
+   * tone so the player SEES the bonus rise as they take damage.
+   */
+  readonly live?: string | null;
 }) {
   return (
     <Box
@@ -66,6 +74,11 @@ export function CardTile({
       <Text dimColor={dim} wrap="wrap">
         {card.description}
       </Text>
+      {live != null && live !== '' && (
+        <Text color={theme.colors.heat} dimColor={dim} bold>
+          {live}
+        </Text>
+      )}
       {trailing !== undefined && <Box>{trailing}</Box>}
     </Box>
   );

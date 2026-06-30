@@ -2,6 +2,7 @@ import type { Rng } from './rng.js';
 import type {
   CombatState,
   Effect,
+  EffectCondition,
   EnemyInstance,
   Statuses,
   StatusId,
@@ -21,6 +22,17 @@ export function addStatus(statuses: Statuses, id: StatusId, stacks: number): Sta
     return rest;
   }
   return { ...statuses, [id]: next };
+}
+
+/**
+ * #62 overheat gradient: the continuous bonus an effect's amount gains from the
+ * player's MISSING HP — `floor((playerMaxHp - playerHp) / divisor)`. Returns 0
+ * when `divisor` is absent (every existing effect → byte-identical) or when the
+ * player is at full HP. Pure, draws no rng. Naturally bounded by maxHp.
+ */
+function missingHpBonus(combat: CombatState, divisor: number | undefined): number {
+  if (divisor === undefined) return 0;
+  return Math.floor((combat.playerMaxHp - combat.playerHp) / divisor);
 }
 
 /** base + strength, ×0.75 if attacker weak, ×1.5 if defender vulnerable. */
@@ -74,6 +86,11 @@ export function applyPlayerEffect(
   switch (effect.kind) {
     case 'damage': {
       const times = effect.times ?? 1;
+      // #62 overheat gradient: add the missing-HP bonus to the PER-HIT base so it
+      // is applied to every hit (intentional). NOTE: combining a large `times`
+      // with `scaleMissingHp` multiplies the bonus across hits and is degenerate;
+      // it is intentionally avoided in content (no card carries both).
+      const base = effect.amount + missingHpBonus(combat, effect.scaleMissingHp);
       let next = combat;
       for (let t = 0; t < times; t++) {
         const indices = targetIndices(next, effect.target, targetIndex);
@@ -84,7 +101,7 @@ export function applyPlayerEffect(
         let slain = 0;
         const enemies = next.enemies.map((e, i) => {
           if (!indices.includes(i) || e.hp <= 0) return e;
-          const hit = hitEnemy(e, attackDamage(effect.amount, next.playerStatuses, e.statuses));
+          const hit = hitEnemy(e, attackDamage(base, next.playerStatuses, e.statuses));
           dealt += e.hp - hit.hp;
           if (hit.hp <= 0) slain += 1;
           return hit;
@@ -98,8 +115,28 @@ export function applyPlayerEffect(
         ...combat,
         playerBlock:
           combat.playerBlock +
-          Math.max(0, effect.amount + getStatus(combat.playerStatuses, 'dexterity')),
+          Math.max(
+            0,
+            // #62: missing-HP bonus is injected into the amount BEFORE dexterity.
+            effect.amount +
+              missingHpBonus(combat, effect.scaleMissingHp) +
+              getStatus(combat.playerStatuses, 'dexterity'),
+          ),
       };
+    case 'loseHp': {
+      // #62 overheat: an unblockable, rng-free HP COST. Ignores block (it is a
+      // cost, not an attack) and FLOORS AT 1 — a self-cost must never be lethal.
+      const afterHp = Math.max(1, combat.playerHp - effect.amount);
+      // #68 overcharge: SELF-INFLICTED overheat (this loseHp path only — NOT the
+      // enemy `hitPlayer` path) converts heat into permanent power. With N stacks
+      // of `overcharge`, each overheat grants N Strength. Pure, draws no rng; a
+      // strict no-op when overcharge is 0, so existing overheat cards/runs are
+      // byte-identical. This is the class-asymmetry hook for `overdrive-core`.
+      const overcharge = getStatus(combat.playerStatuses, 'overcharge');
+      const playerStatuses =
+        overcharge > 0 ? addStatus(combat.playerStatuses, 'strength', overcharge) : combat.playerStatuses;
+      return { ...combat, playerHp: afterHp, playerStatuses };
+    }
     case 'draw':
       return drawCards(combat, effect.count, rng);
     case 'gainEnergy':
@@ -123,6 +160,50 @@ export function applyPlayerEffect(
           : e,
       );
       return { ...combat, enemies };
+    }
+    case 'conditional': {
+      // Pure, deterministic branch over current state (no rng draws). The chosen
+      // branch's effects flow through the SAME path (recurse) with the same
+      // targetIndex, so target resolution + stat tracking (#25) are unchanged.
+      const branch = evalCondition(combat, effect.condition, targetIndex)
+        ? effect.then
+        : (effect.else ?? []);
+      let next = combat;
+      for (const inner of branch) {
+        next = applyPlayerEffect(next, inner, targetIndex, rng);
+      }
+      return next;
+    }
+  }
+}
+
+/**
+ * Evaluate a conditional Effect's predicate against the CURRENT combat state.
+ * Pure & deterministic: reads only state + the selected target, draws no rng.
+ */
+function evalCondition(
+  combat: CombatState,
+  condition: EffectCondition,
+  targetIndex: number | undefined,
+): boolean {
+  switch (condition.type) {
+    case 'targetHasStatus': {
+      const need = condition.atLeast ?? 1;
+      // Read the status off the SELECTED enemy when one is targeted; otherwise
+      // (e.g. a self/aoe context) fall back to the first living enemy so an
+      // allEnemies card can still gate on "the pack is poisoned".
+      const enemy =
+        targetIndex !== undefined
+          ? combat.enemies[targetIndex]
+          : combat.enemies.find((e) => e.hp > 0);
+      if (!enemy) return false;
+      return getStatus(enemy.statuses, condition.status) >= need;
+    }
+    case 'enemyCount': {
+      const living = combat.enemies.filter((e) => e.hp > 0).length;
+      if (condition.op === 'eq') return living === condition.value;
+      if (condition.op === 'lte') return living <= condition.value;
+      return living >= condition.value;
     }
   }
 }
@@ -178,9 +259,14 @@ export function applyEnemyEffect(
         playerStatuses: addStatus(combat.playerStatuses, effect.status, effect.stacks),
       };
     }
-    // Enemies have no hand or energy; these are player-only primitives.
+    // Enemies have no hand or energy; these are player-only primitives. The
+    // `conditional` kind is authored only on player-facing content (#42), and
+    // `loseHp` is the player's overheat self-cost (#62) — both are inert no-ops
+    // here; enemy moves never carry them (enemies don't scale on player HP).
     case 'draw':
     case 'gainEnergy':
+    case 'conditional':
+    case 'loseHp':
       return combat;
   }
 }

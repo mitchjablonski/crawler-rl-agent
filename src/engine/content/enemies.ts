@@ -199,14 +199,28 @@ const defs: readonly EnemyDef[] = [
     { name: 'Fence Post', effects: [{ kind: 'damage', amount: 7, target: 'enemy' }] },
     { name: 'Boundary Check', effects: [{ kind: 'block', amount: 3 }, { kind: 'damage', amount: 2, target: 'enemy' }] },
   ] },
-  { id: 'merge-conflict', name: 'Merge Conflict', sigil: '><=><', hp: [34, 40], isElite: true,
+  // HP trimmed [34,40] -> [30,35]: a shorter fight means fewer total Force Pushes
+  // land, which cuts the CUMULATIVE raw burst exposure that kills the block-light
+  // Apothecary (each turn's hit lands raw, no block buffer) without weakening the
+  // per-hit threat — it stays a real elite. This shortens exposure; it does NOT
+  // raise the enemy's Rebase block (that would make it tankier = longer fight =
+  // MORE Force Pushes, the opposite of the goal).
+  { id: 'merge-conflict', name: 'Merge Conflict', sigil: '><=><', hp: [30, 35], isElite: true,
     moves: [
       { name: 'Both Changes', effects: [{ kind: 'damage', amount: 6, target: 'enemy', times: 2 }] },
-      { name: 'Force Push', effects: [{ kind: 'damage', amount: 12, target: 'enemy' }] },
-      // Rebase rallies +1 strength (was +2): the compounding strength gain made
-      // phase-1 attacks escalate fast (Force Push 12 -> 14 -> 16 ...), which was
-      // the bulk of merge-conflict's over-lethality across its two arc encounters.
-      { name: 'Rebase', effects: [{ kind: 'block', amount: 6 }, { kind: 'applyStatus', status: 'strength', stacks: 1, target: 'self' }] },
+      // Base-pool Force Push trimmed 12 -> 10 (now uniform with phase-2). The flat
+      // 12 burst hit block-light classes (Apothecary) raw — no block buffer —
+      // making merge-conflict ~boss-level lethal for them while Knight's block
+      // soaked most of it. 10 is still a real elite hit but drops the raw spike;
+      // paired with the HP trim above (which shortens cumulative exposure) it
+      // brings Apothecary's merge-conflict death share to ~40% of its boss deaths
+      // (from ~76%) while Knight's share is essentially unchanged (~25%).
+      { name: 'Force Push', effects: [{ kind: 'damage', amount: 10, target: 'enemy' }] },
+      // Rebase is a pure block breather (no strength) — Force Push stays flat
+      // to stop cross-act escalation. The compounding strength gain (Force Push
+      // 12 -> 13 -> 14 ...) was the bulk of merge-conflict's over-lethality across
+      // its two arc encounters, where it out-killed all but the boss in nightmare.
+      { name: 'Rebase', effects: [{ kind: 'block', amount: 6 }] },
     ],
     // Showcase phase: once cornered (<=30% HP) it goes aggressive — but, like the
     // boss's enraged phase, it punctuates the offense with a defensive block beat
@@ -219,8 +233,10 @@ const defs: readonly EnemyDef[] = [
         hpThreshold: 0.3,
         name: 'Unresolvable',
         moves: [
-          // Phase-2 Force Push trimmed 12 -> 10 (base pool stays 12): the
-          // cornered spam was the lethal spike that out-killed the boss.
+          // Phase-2 Force Push stays 10 (uniform with the base pool). The cornered
+          // spam was the lethal spike that out-killed the boss; on a block-light
+          // class (Apothecary) this raw spike is the dominant kill. The HP trim
+          // (above) shortens the time spent here, cutting cumulative exposure.
           { name: 'Force Push', effects: [{ kind: 'damage', amount: 10, target: 'enemy' }] },
           { name: 'Both Changes', effects: [{ kind: 'damage', amount: 6, target: 'enemy', times: 2 }] },
           // Pure block breather (no strength) — a defensive beat that gives the

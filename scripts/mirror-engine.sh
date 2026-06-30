@@ -27,6 +27,7 @@ rsync -a \
   --exclude='.evolution-artifacts' --exclude='.github' \
   --exclude='README.md' --exclude='docs' --exclude='.gitignore' \
   --exclude='vitest.config.ts' --exclude='tsconfig.scripts.json' \
+  --exclude='package.json' \
   --include='src/search/legalActions.ts' --include='src/search/legalActions.test.ts' \
   --include='src/search/mcts.ts'         --include='src/search/mcts.test.ts' \
   --exclude='src/search/*' \
@@ -35,4 +36,6 @@ rsync -a \
 echo "Installing deps..."
 ( cd "$HERE" && npm install --silent )
 
-echo "Done. Verify with: npx vitest run"
+# package.json is preserved (holds our extra scripts, e.g. typecheck:scripts). Engine deps rarely
+# change; if upstream added one, hand-merge it:  diff <(jq .dependencies "$UPSTREAM"/package.json) <(jq .dependencies "$HERE"/package.json)
+echo "Done. Verify with: npx vitest run  (and: diff deps vs $UPSTREAM/package.json if a new mechanic needs a lib)"

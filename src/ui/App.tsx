@@ -299,6 +299,10 @@ export function App({ deps }: { readonly deps: GameDeps }) {
     (id) => christenings.nameFor('relic', id) ?? game.content.relics[id]?.name ?? id,
   );
 
+  // #52: the active class display name, surfaced in the HUD + GameOver report so
+  // the player's class identity is visible throughout the run (not just Title).
+  const activeCharacterName = CHARACTERS[character]?.name ?? character;
+
   // #28: personal best for this run's (character, mode) among PRIOR runs. The
   // finished run is already appended to history (recordRun pushes to the end at
   // run-end), so we drop the last record to compare "NEW BEST" against the prior
@@ -312,6 +316,13 @@ export function App({ deps }: { readonly deps: GameDeps }) {
       })()
     : null;
 
+  // #46: names of the unlocks this run just earned (same `justUnlocked` diff the
+  // Title flashes), resolved id->name exactly as the Title path does, so GameOver
+  // can celebrate them at the run's peak moment. Empty unless a milestone crossed.
+  const unlockedNames = justUnlocked
+    .map((id) => game.content.cards[id]?.name ?? game.content.relics[id]?.name ?? id)
+    .sort();
+
   return (
     <Box flexDirection="column">
       {!over && (
@@ -320,18 +331,22 @@ export function App({ deps }: { readonly deps: GameDeps }) {
           linked={events.linked}
           narration={events.narration}
           relics={relicNames}
+          characterName={activeCharacterName}
         />
       )}
       {events.pause && !over ? (
         <PauseOverlay pause={events.pause} snark={snark} onDismiss={events.dismissPause} />
-      ) : deckOpen && run.phase === 'map' && !over ? (
-        // Deck-view overlay captures input; the underlying map's keys don't fire.
+      ) : deckOpen && (run.phase === 'map' || run.phase === 'combat') && !over ? (
+        // Deck-view overlay captures input; the underlying screen's keys don't
+        // fire. #56: also opens over combat (read-only, grouped by pile) so the
+        // player can check "what's still in my draw pile?" mid-fight.
         <DeckView state={run} content={game.content} onClose={() => setDeckOpen(false)} />
       ) : (
         <>
           {run.phase === 'map' && (
             <MapScreen
               state={run}
+              content={game.content}
               dispatch={game.dispatch}
               onViewDeck={() => setDeckOpen(true)}
             />
@@ -342,6 +357,7 @@ export function App({ deps }: { readonly deps: GameDeps }) {
               content={game.content}
               dispatch={game.dispatch}
               nameFor={enemyDisplayName}
+              onViewDeck={() => setDeckOpen(true)}
             />
           )}
           {run.phase === 'reward' && (
@@ -369,10 +385,12 @@ export function App({ deps }: { readonly deps: GameDeps }) {
             <GameOverScreen
               state={run}
               relicNames={relicNames}
+              characterName={activeCharacterName}
               onNew={newRun}
               onTitle={quitToTitle}
               score={runScore(run)}
               priorBest={priorBest}
+              unlockedNames={unlockedNames}
               {...(dailyRunDate ? { dailyDate: dailyRunDate } : {})}
             />
           )}

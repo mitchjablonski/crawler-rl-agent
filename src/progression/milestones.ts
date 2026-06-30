@@ -64,7 +64,7 @@ export const MILESTONE_RULES: readonly MilestoneRule[] = [
   {
     id: MILESTONES.THREE_VICTORIES,
     met: (runs) => runs.filter(isVictory).length >= 3,
-    grants: ['veterans-edge', 'trophy-rack', 'veterans-banner'],
+    grants: ['veterans-edge', 'trophy-rack', 'veterans-banner', 'surgeons-satchel'],
   },
 ];
 

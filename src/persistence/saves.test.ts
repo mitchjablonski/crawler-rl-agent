@@ -118,6 +118,33 @@ describe('run saves', () => {
     });
   });
 
+  it('quarantines a v10 save (pre-#49 shop shape) rather than half-loading (#49 bump)', () => {
+    const store = createSaveStore(dir);
+    fs.writeFileSync(
+      path.join(dir, 'run.json'),
+      JSON.stringify({ version: 10, savedAt: 1, state: { event: null } }),
+    );
+    expect(store.loadRun()).toBeNull();
+    expect(fs.readdirSync(dir).some((f) => f.startsWith('run.json.corrupt-'))).toBe(true);
+  });
+
+  it('roundtrips a v11 run state carrying shop removeUsed (#49)', () => {
+    const store = createSaveStore(dir, () => 1_750_000_000_000);
+    const state = {
+      ...sampleRun(),
+      phase: 'shop' as const,
+      shop: {
+        stock: [{ cardId: 'shield-wall', price: 50, sold: false }],
+        potionStock: [],
+        removeUsed: true,
+      },
+    };
+    store.saveRun(state);
+    const loaded = store.loadRun();
+    expect(loaded?.state).toEqual(state);
+    expect(loaded?.state.shop?.removeUsed).toBe(true);
+  });
+
   it('returns null when no save exists, and after clearRun', () => {
     const store = createSaveStore(dir);
     expect(store.loadRun()).toBeNull();

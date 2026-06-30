@@ -3,15 +3,78 @@ import type { RngStreams } from './rng.js';
 // ---- Effects: the closed primitive set every system composes from ----
 
 export type TargetKind = 'enemy' | 'allEnemies' | 'self';
-export type StatusId = 'strength' | 'vulnerable' | 'weak' | 'regen' | 'poison' | 'dexterity';
+export type StatusId =
+  | 'strength'
+  | 'vulnerable'
+  | 'weak'
+  | 'regen'
+  | 'poison'
+  | 'dexterity'
+  /**
+   * `overcharge` (#68): a PERMANENT combat power (like strength/dexterity — it
+   * does NOT decay at round end). While the player carries >= 1 stack, every
+   * SELF-INFLICTED overheat (`loseHp`) grants that many Strength. This is what
+   * makes `overdrive-core` class-asymmetric: it only pays off in a deck that
+   * overheats (the Overclocker), and is inert for Knight/Apothecary (no loseHp).
+   */
+  | 'overcharge';
 
 export type Effect =
-  | { kind: 'damage'; amount: number; target: TargetKind; times?: number }
-  | { kind: 'block'; amount: number }
+  /**
+   * `scaleMissingHp` (#62, "overheat gradient"): an OPTIONAL positive-integer
+   * DIVISOR that scales the effect CONTINUOUSLY with the player's missing HP.
+   * Before the existing pipeline (strength/vulnerable/weak math, and before
+   * `times`), the amount gains `+ floor((playerMaxHp - playerHp) / scaleMissingHp)`.
+   * This is a gradient, NOT a binary threshold: the bonus grows smoothly as the
+   * player takes damage and is naturally bounded by maxHp. Player-only (computed
+   * from combat.playerMaxHp - combat.playerHp); enemies do NOT scale on player
+   * missing-HP, so it is ignored on the enemy-effect path. Pure, draws no rng.
+   *
+   * Determinism (#62, like #42): both new primitives live in STATIC content and
+   * change no serialized RunState shape (decks are card ids), so no SAVE_VERSION
+   * bump. Existing content uses NEITHER `loseHp` nor `scaleMissingHp` (absent on
+   * every card), so they are inert for old content and every existing seeded run
+   * stays byte-identical: `run(seed) === run(seed)`.
+   */
+  | { kind: 'damage'; amount: number; target: TargetKind; times?: number; scaleMissingHp?: number }
+  | { kind: 'block'; amount: number; scaleMissingHp?: number }
   | { kind: 'draw'; count: number }
   | { kind: 'gainEnergy'; amount: number }
   | { kind: 'heal'; amount: number }
-  | { kind: 'applyStatus'; status: StatusId; stacks: number; target: TargetKind };
+  /**
+   * `loseHp` (#62, "overheat"): an UNBLOCKABLE direct HP COST paid by the player
+   * for power. It FLOORS AT 1 — `playerHp = max(1, playerHp - amount)` — because
+   * a self-cost must never kill you; the risk is being left fragile vs the
+   * enemy's next turn (and, via `scaleMissingHp`, fuelling your own scaling).
+   * Ignores block (it is a cost, not an attack). Player-only, draws no rng.
+   */
+  | { kind: 'loseHp'; amount: number }
+  | { kind: 'applyStatus'; status: StatusId; stacks: number; target: TargetKind }
+  /**
+   * A general, deterministic branch over the CURRENT combat state (#42). Evaluate
+   * {@link condition} against the state/selected target (pure, no rng, no clock);
+   * if it holds apply `then`, otherwise apply `else` (or nothing). `then`/`else`
+   * are themselves Effect[] applied through the SAME application path, so they
+   * compose and nest (target resolution + stat tracking flow through unchanged).
+   *
+   * Effects live in STATIC content (cards/potions/relics) — never in serialized
+   * RunState (decks are card ids) — so a nested Effect adds no save-shape change.
+   * Existing content never uses this kind, so it is inert for them: byte-identical.
+   */
+  | { kind: 'conditional'; condition: EffectCondition; then: readonly Effect[]; else?: readonly Effect[] };
+
+/**
+ * The closed set of deterministic predicates a `conditional` Effect may test.
+ * Each reads only the current combat state / selected target — pure, no rng.
+ * - targetHasStatus: the SELECTED target carries >= `atLeast` (default 1) stacks
+ *   of `status` (e.g. "is the target poisoned?"). For 'self'/'allEnemies' effects
+ *   it reads the player / the first living enemy respectively.
+ * - enemyCount: the number of LIVING enemies compares (`op`) against `value`
+ *   (e.g. exactly one enemy → a single-target floor for an AoE card).
+ */
+export type EffectCondition =
+  | { type: 'targetHasStatus'; status: StatusId; atLeast?: number }
+  | { type: 'enemyCount'; op: 'eq' | 'lte' | 'gte'; value: number };
 
 export type Statuses = Partial<Readonly<Record<StatusId, number>>>;
 
@@ -109,19 +172,28 @@ export interface EnemyDef {
  * - combatStart / turnStart: fired from startCombat / endTurn (COMBAT rng stream).
  * - onCardPlayed: fired ONCE after each card the player plays.
  * - onKill: fired ONCE per enemy a played card kills this card (per-death).
+ * - onCombatEnd: fired ONCE on combat VICTORY (not death/flee). The fight is
+ *   OVER, so its effects apply to the RUN (`state.hp`, capped at `state.maxHp`),
+ *   NOT to CombatState. Restricted to heal-only effects, so it consumes NO rng.
  *
- * Determinism note: the new triggers (onCardPlayed/onKill) fire at the playCard
- * chokepoint and are strict NO-OPS (consume no rng, change no state) for any
- * player who owns no relic with that trigger — so existing runs whose relics are
- * all combatStart/turnStart stay byte-identical.
+ * Determinism note: the combat triggers (onCardPlayed/onKill) fire at the
+ * playCard chokepoint and are strict NO-OPS (consume no rng, change no state)
+ * for any player who owns no relic with that trigger — so existing runs whose
+ * relics are all combatStart/turnStart stay byte-identical. onCombatEnd is
+ * likewise rng-free (heal-only) and a strict no-op for non-owners: it applies to
+ * RUN hp AFTER the combat rng stream has closed, so the combat simulation (and
+ * every existing seeded run) is byte-identical whether or not the player owns
+ * one. (Owning a new onCombatEnd relic can still change which RELIC an elite
+ * rewards, exactly like adding any other relic to the pool.)
  *
- * Firing sites (all via `applyRelics` on the combat rng stream):
+ * Firing sites:
  *   - combatStart  → `startCombat` (combat.ts), after the opening hand is drawn
  *   - turnStart    → `applyAction` 'endTurn' case (run.ts), after the enemy turn
  *   - onKill       → `playCard` (combat.ts), once per enemy killed by that card
  *   - onCardPlayed → `playCard` (combat.ts), once after the card resolves
+ *   - onCombatEnd  → `finishCombat` (run.ts) via `applyRelicsToRun`, once per win
  */
-export type RelicTrigger = 'combatStart' | 'turnStart' | 'onCardPlayed' | 'onKill';
+export type RelicTrigger = 'combatStart' | 'turnStart' | 'onCardPlayed' | 'onKill' | 'onCombatEnd';
 
 /**
  * An optional, light condition gating whether a relic's effects fire. Pure —
@@ -191,6 +263,20 @@ export interface EventRequirement {
   readonly atLeast: number;
 }
 
+/**
+ * Optional per-event aftermath flavor (display only). A short, tone-appropriate
+ * line closing the narrative loop on the result screen, keyed off the resolved
+ * outcome's VALENCE (did the player come out ahead or behind). Static content —
+ * no rng, no state shape impact. Events without it fall back to a generic
+ * valence-keyed bank, so every result reads well and authored ones shine.
+ */
+export interface EventAftermath {
+  /** Shown when the net resolved outcome was favorable (a gain). */
+  readonly win: string;
+  /** Shown when the net resolved outcome was unfavorable (a loss). */
+  readonly loss: string;
+}
+
 export interface NarrativeEventDef {
   readonly id: string;
   readonly name: string;
@@ -201,6 +287,18 @@ export interface NarrativeEventDef {
     /** If present, the option is selectable only when the requirement holds. */
     readonly requires?: EventRequirement;
   }[];
+  /**
+   * Optional aftermath flavor, rendered on the result screen keyed off outcome
+   * valence. Purely display; events may omit it (valence-bank fallback applies).
+   */
+  readonly aftermath?: EventAftermath;
+  /**
+   * #69 Tiered reveal: when true, this event stays a "??? Unknown" mystery on the
+   * map even though its id is decided at generation. Curated true on the spicier,
+   * high-variance gambles (the ones with `rollOutcomes`) so mystery tracks stakes.
+   * Display-only; the engine resolves the stored eventId either way.
+   */
+  readonly hiddenOnMap?: boolean;
 }
 
 export interface ContentRegistry {
@@ -222,6 +320,13 @@ export interface MapNode {
   /** 0-indexed act this node belongs to (single mode = all act 0). */
   readonly act: number;
   readonly next: readonly string[];
+  /**
+   * #69 Tiered reveal: for `kind === 'event'` nodes ONLY, the specific narrative
+   * event is decided at MAP GENERATION (not at entry) and stored here so the map
+   * can NAME most events for route planning. Entering the node reads this id
+   * (no re-roll). Undefined on non-event nodes.
+   */
+  readonly eventId?: string;
 }
 
 export interface RunMap {
@@ -313,6 +418,14 @@ export interface RunState {
   readonly shop: {
     readonly stock: readonly { readonly cardId: string; readonly price: number; readonly sold: boolean }[];
     readonly potionStock: readonly { readonly potionId: string; readonly price: number; readonly sold: boolean }[];
+    /**
+     * Whether the one-per-visit card-removal service has been used this shop
+     * (#49). Reset to false each time a shop node is entered; set true after a
+     * `removeCard` so the deck-thinning service can be bought at most ONCE per
+     * shop. Player-chosen + deterministic (no rng), so seeded replay of runs
+     * that never remove is byte-identical — the flag is simply always false.
+     */
+    readonly removeUsed: boolean;
   } | null;
   readonly event: {
     readonly eventId: string;
@@ -375,6 +488,7 @@ export type GameAction =
   | { type: 'skipReward' }
   | { type: 'buyCard'; index: number }
   | { type: 'buyPotion'; index: number }
+  | { type: 'removeCard'; deckIndex: number }
   | { type: 'leaveShop' }
   | { type: 'rest' }
   | { type: 'upgradeCard'; deckIndex: number }

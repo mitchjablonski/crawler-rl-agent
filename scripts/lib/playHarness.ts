@@ -165,6 +165,8 @@ export interface AutoPlayResult {
   eventResolved: boolean;
   /** True iff the autoplayer opened (and closed) the deck-view overlay. */
   viewedDeck: boolean;
+  /** True iff the autoplayer removed a card via the shop's removal service. */
+  removedCard: boolean;
 }
 
 /** First potion hotkey letter shown on a Satchel: line, or null if none. */
@@ -218,6 +220,10 @@ export async function autoPlay(
   // offers an upgradeable card; thereafter rests just heal ([r]).
   let upgradedCard = false;
   let triedUpgrade = false;
+  // Exercise the shop card-removal keypath ([r] then [1]) once, on the first
+  // shop that offers an available removal; thereafter shops just buy/leave.
+  let removedCard = false;
+  let triedRemove = false;
   let eventResolved = false;
   // Open the deck-view overlay once (first map) so the overlay path gets smoke
   // coverage: press 'v' to open, snapshot it, press 'v' to close.
@@ -248,6 +254,7 @@ export async function autoPlay(
         upgradedCard,
         eventResolved,
         viewedDeck,
+        removedCard,
       };
     }
 
@@ -269,6 +276,27 @@ export async function autoPlay(
         usedPotion = true;
         combatCard = 1;
         continue;
+      }
+    }
+    // In the shop: exercise the card-removal service ([r] opens the chooser,
+    // [1] removes the first deck card) once, when it's available (not dim). The
+    // affordance reads "[r] Remove a card  Ng" followed by a reason in parens
+    // only when unavailable; we open it and confirm the chooser appeared.
+    if (phase === 'shop' && !triedRemove) {
+      triedRemove = true;
+      const removeLine = before.split('\n').find((l) => l.includes('Remove a card'));
+      // Available iff there's a Remove line with no "(...)" unavailable reason.
+      if (removeLine && !/\([^)]*\)/.test(removeLine)) {
+        await h.press('r');
+        steps.push({ step, phase, input: 'r' });
+        const afterR = h.text();
+        if (afterR.includes('Remove a card:') && /\[1\]/.test(afterR)) {
+          await h.press('1');
+          steps.push({ step, phase, input: '1' });
+          if (!h.text().includes('Remove a card:')) removedCard = true;
+          continue;
+        }
+        // Chooser didn't open as expected — fall through to normal shop handling.
       }
     }
     // In the shop: buy one affordable potion (slot permitting) before leaving so
@@ -410,6 +438,8 @@ export async function autoPlay(
     usedPotion,
     upgradedCard,
     eventResolved,
+    viewedDeck,
+    removedCard,
   };
 }
 
