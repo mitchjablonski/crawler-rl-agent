@@ -2,7 +2,7 @@ import type { ContentRegistry, RunState, StatusId } from '../engine/types.js';
 import { MAX_ENEMIES, MAX_HAND } from './encode.js';
 import { type VocabManifest, emptyManifest, extendManifest, manifestFingerprint, widthOf } from './vocab.js';
 
-const STATUS_IDS: readonly StatusId[] = ['strength', 'vulnerable', 'weak', 'regen', 'poison', 'dexterity'];
+const STATUS_IDS: readonly StatusId[] = ['strength', 'vulnerable', 'weak', 'regen', 'poison', 'dexterity', 'overcharge'];
 
 /** Token kinds; the Python model has one embedding table per kind. */
 export const TOKEN_TYPES = ['context', 'player', 'card', 'enemy'] as const;
